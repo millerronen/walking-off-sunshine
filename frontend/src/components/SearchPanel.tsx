@@ -5,10 +5,18 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
+import { Geolocation } from "@capacitor/geolocation";
 import type { LatLon } from "../types";
 
 interface Props {
-  onSearch: (origin: LatLon, destination: LatLon, datetime: string) => void;
+  onSearch: (
+    origin: LatLon,
+    destination: LatLon,
+    datetime: string,
+    originAddress: string,
+    destAddress: string,
+    usingGpsOrigin: boolean
+  ) => void;
   isLoading: boolean;
 }
 
@@ -29,6 +37,7 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
   const [destPlace, setDestPlace] =
     useState<google.maps.places.PlaceResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     window.__googleMapsReadyPromise.then(() => {
@@ -49,25 +58,59 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     return { lat: loc.lat(), lon: loc.lng() };
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-
-    const origin = extractLatLon(originPlace, "origin");
-    if (typeof origin === "string") { setError(origin); return; }
 
     const destination = extractLatLon(destPlace, "destination");
     if (typeof destination === "string") { setError(destination); return; }
 
-    onSearch(origin, destination, new Date().toISOString());
+    const destAddress = destPlace?.formatted_address ?? destInputRef.current?.value ?? "";
+    const originIsEmpty = !originInputRef.current?.value.trim();
+
+    if (originIsEmpty) {
+      setLocating(true);
+      try {
+        const { location: status } = await Geolocation.checkPermissions();
+        if (status === "denied") {
+          setError("Location access denied. Go to Settings → HolechBaTzel → Location and allow access, or enter a starting point.");
+          setLocating(false);
+          return;
+        }
+        if (status === "prompt" || status === "prompt-with-rationale") {
+          const result = await Geolocation.requestPermissions();
+          if (result.location !== "granted") {
+            setError("Location access denied. Enter a starting point or enable it in Settings.");
+            setLocating(false);
+            return;
+          }
+        }
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
+        const origin: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        onSearch(origin, destination, new Date().toISOString(), "", destAddress, true);
+      } catch (err) {
+        console.error("Geolocation error:", err);
+        setError("Could not get your location. Enter a starting point or check Settings → Privacy → Location Services.");
+      } finally {
+        setLocating(false);
+      }
+    } else {
+      // Manual origin mode
+      const origin = extractLatLon(originPlace, "origin");
+      if (typeof origin === "string") { setError(origin); return; }
+      const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
+      onSearch(origin, destination, new Date().toISOString(), originAddress, destAddress, false);
+    }
   }
+
+  const busy = isLoading || locating;
 
   return (
     <form onSubmit={handleSubmit} style={styles.card}>
       {/* Header */}
       <div style={styles.header}>
         <span style={styles.sun}>☀️</span>
-        <span style={styles.title}>Walking Off Sunshine</span>
+        <span style={styles.title}>HolechBaTzel</span>
       </div>
 
       {/* Inputs */}
@@ -77,9 +120,11 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
           <input
             ref={originInputRef}
             type="text"
-            placeholder="From"
-            style={styles.input}
-            required
+            placeholder="From (optional — uses your location)"
+            style={{ ...styles.input, ...styles.inputOptional }}
+            onChange={() => {
+              if (!originInputRef.current?.value.trim()) setOriginPlace(null);
+            }}
           />
         </div>
         <div style={styles.dividerLine} />
@@ -97,8 +142,8 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
 
       {error && <p style={styles.error}>{error}</p>}
 
-      <button type="submit" style={styles.button} disabled={isLoading}>
-        {isLoading ? "Searching…" : "Find Shaded Routes"}
+      <button type="submit" style={styles.button} disabled={busy}>
+        {locating ? "Getting location…" : busy ? "Searching…" : "Find Shaded Routes"}
       </button>
     </form>
   );
@@ -157,6 +202,10 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 15,
     outline: "none",
     color: "#1a1a1a",
+  },
+  inputOptional: {
+    fontSize: 13,
+    color: "#888",
   },
   error: {
     fontSize: 12,

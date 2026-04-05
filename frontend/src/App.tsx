@@ -11,14 +11,20 @@ export default function App() {
   const [routes, setRoutes] = useState<ShadeRoute[]>([]);
   const [shortestDistance, setShortestDistance] = useState(0);
   const [selectedTier, setSelectedTier] = useState<TierPercent | null>(null);
+  const [originAddress, setOriginAddress] = useState("");
+  const [destAddress, setDestAddress] = useState("");
+  const [usingGpsOrigin, setUsingGpsOrigin] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
 
-  async function handleSearch(origin: LatLon, destination: LatLon, datetime: string) {
+  async function handleSearch(origin: LatLon, destination: LatLon, datetime: string, originAddr: string, destAddr: string, gpsOrigin: boolean) {
     setStatus("loading");
     setErrorMessage(null);
     setRoutes([]);
     setSelectedTier(null);
     setSheetExpanded(false);
+    setOriginAddress(originAddr);
+    setDestAddress(destAddr);
+    setUsingGpsOrigin(gpsOrigin);
 
     try {
       const data = await fetchShadeRoutes({ origin, destination, datetime });
@@ -86,6 +92,9 @@ export default function App() {
                   setSheetExpanded(false);
                 }}
                 shortestDistanceMeters={shortestDistance}
+                originAddress={originAddress}
+                destAddress={destAddress}
+                usingGpsOrigin={usingGpsOrigin}
               />
             </div>
           )}

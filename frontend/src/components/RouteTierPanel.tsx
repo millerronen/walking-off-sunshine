@@ -7,6 +7,9 @@ interface Props {
   selectedTier: TierPercent | null;
   onSelectTier: (tier: TierPercent | null) => void;
   shortestDistanceMeters: number;
+  originAddress: string;
+  destAddress: string;
+  usingGpsOrigin: boolean;
 }
 
 function formatDistance(meters: number): string {
@@ -25,10 +28,17 @@ function shadePercent(score: number): string {
   return Math.round(score * 100) + "%";
 }
 
-function buildGoogleMapsUrl(polyline: ShadeRoute["polyline"]): string {
-  if (polyline.length < 2) return "https://maps.google.com";
-  const origin = `${polyline[0].lat},${polyline[0].lon}`;
-  const destination = `${polyline[polyline.length - 1].lat},${polyline[polyline.length - 1].lon}`;
+function buildNavigateUrl(originAddress: string, destAddress: string, usingGpsOrigin: boolean): string {
+  const destination = encodeURIComponent(destAddress);
+  if (typeof window !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    if (usingGpsOrigin) {
+      // No saddr → Google Maps uses current GPS → shows "Start" navigation button
+      return `comgooglemaps://?daddr=${destination}&directionsmode=walking`;
+    }
+    // saddr specified → route planning mode → shows Preview (user taps Start manually)
+    return `comgooglemaps://?saddr=${encodeURIComponent(originAddress)}&daddr=${destination}&directionsmode=walking`;
+  }
+  const origin = encodeURIComponent(originAddress);
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
 
@@ -37,6 +47,9 @@ export function RouteTierPanel({
   selectedTier,
   onSelectTier,
   shortestDistanceMeters,
+  originAddress,
+  destAddress,
+  usingGpsOrigin,
 }: Props) {
   if (routes.length === 0) return null;
 
@@ -97,16 +110,17 @@ export function RouteTierPanel({
                 </div>
               </div>
 
-              {/* Navigate button */}
-              <a
-                href={buildGoogleMapsUrl(route.polyline)}
-                target="_blank"
-                rel="noopener noreferrer"
+              {/* Navigate button — opens native Maps app via system handler */}
+              <button
                 style={{ ...styles.navigateBtn, borderColor: color, color }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const url = buildNavigateUrl(originAddress, destAddress, usingGpsOrigin);
+                  window.open(url, "_system");
+                }}
               >
                 ↗
-              </a>
+              </button>
             </button>
           );
         })}
