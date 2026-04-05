@@ -11,16 +11,14 @@ export default function App() {
   const [routes, setRoutes] = useState<ShadeRoute[]>([]);
   const [shortestDistance, setShortestDistance] = useState(0);
   const [selectedTier, setSelectedTier] = useState<TierPercent | null>(null);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
 
-  async function handleSearch(
-    origin: LatLon,
-    destination: LatLon,
-    datetime: string
-  ) {
+  async function handleSearch(origin: LatLon, destination: LatLon, datetime: string) {
     setStatus("loading");
     setErrorMessage(null);
     setRoutes([]);
     setSelectedTier(null);
+    setSheetExpanded(false);
 
     try {
       const data = await fetchShadeRoutes({ origin, destination, datetime });
@@ -28,37 +26,48 @@ export default function App() {
       setShortestDistance(data.shortestDistanceMeters);
       setStatus("success");
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "An unexpected error occurred."
-      );
+      setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
       setStatus("error");
     }
   }
 
+  const hasResults = status === "success" && routes.length > 0;
+  const showSheet = hasResults || status === "loading" || status === "error";
+
   return (
-    <div style={styles.appShell}>
-      {/* ── Left Sidebar ── */}
-      <aside style={styles.sidebar}>
-        <div style={styles.sidebarScroll}>
-          <SearchPanel
-            onSearch={handleSearch}
-            isLoading={status === "loading"}
-          />
+    <div style={styles.shell}>
+      {/* Full-screen map */}
+      <div style={styles.mapLayer}>
+        <MapView routes={routes} selectedTier={selectedTier} />
+      </div>
 
-          {/* Divider */}
-          {(status === "success" || status === "error" || status === "loading") && (
-            <hr style={styles.divider} />
-          )}
+      {/* Top search card */}
+      <div style={styles.topCard}>
+        <SearchPanel onSearch={handleSearch} isLoading={status === "loading"} />
+      </div>
 
-          {/* Loading state */}
+      {/* Bottom sheet */}
+      {showSheet && (
+        <div
+          style={{
+            ...styles.sheet,
+            transform: sheetExpanded ? "translateY(0)" : "translateY(calc(100% - 140px))",
+          }}
+        >
+          {/* Drag handle */}
+          <div style={styles.handleRow} onClick={() => setSheetExpanded((v) => !v)}>
+            <div style={styles.handle} />
+          </div>
+
+          {/* Loading */}
           {status === "loading" && (
-            <div style={styles.statusBox}>
+            <div style={styles.sheetCenter}>
               <div style={styles.spinner} />
-              <p style={styles.statusText}>Finding shaded routes…</p>
+              <p style={styles.sheetHint}>Finding shaded routes…</p>
             </div>
           )}
 
-          {/* Error state */}
+          {/* Error */}
           {status === "error" && errorMessage && (
             <div style={styles.errorBox}>
               <strong>Error</strong>
@@ -67,69 +76,86 @@ export default function App() {
           )}
 
           {/* Results */}
-          {status === "success" && routes.length > 0 && (
-            <RouteTierPanel
-              routes={routes}
-              selectedTier={selectedTier}
-              onSelectTier={setSelectedTier}
-              shortestDistanceMeters={shortestDistance}
-            />
-          )}
-
-          {status === "success" && routes.length === 0 && (
-            <p style={styles.statusText}>
-              No routes found. Try different locations.
-            </p>
+          {hasResults && (
+            <div style={styles.sheetScroll}>
+              <RouteTierPanel
+                routes={routes}
+                selectedTier={selectedTier}
+                onSelectTier={(tier) => {
+                  setSelectedTier(tier);
+                  setSheetExpanded(false);
+                }}
+                shortestDistanceMeters={shortestDistance}
+              />
+            </div>
           )}
         </div>
-      </aside>
-
-      {/* ── Map Panel ── */}
-      <main style={styles.mapPanel}>
-        <MapView routes={routes} selectedTier={selectedTier} />
-      </main>
+      )}
     </div>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  appShell: {
-    display: "flex",
-    height: "100%",
+  shell: {
+    position: "relative",
     width: "100%",
+    height: "100%",
     overflow: "hidden",
+    backgroundColor: "#f5f5f5",
   },
-  sidebar: {
-    width: 320,
+  mapLayer: {
+    position: "absolute",
+    inset: 0,
+  },
+  topCard: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    padding: "12px 12px 0",
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: "#fff",
+    borderRadius: "20px 20px 0 0",
+    boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+    transition: "transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
+    maxHeight: "85%",
+    display: "flex",
+    flexDirection: "column",
+  },
+  handleRow: {
+    display: "flex",
+    justifyContent: "center",
+    padding: "12px 0 8px",
+    cursor: "pointer",
     flexShrink: 0,
-    backgroundColor: "#fafafa",
-    borderRight: "1px solid #e0e0e0",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
   },
-  sidebarScroll: {
-    flex: 1,
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ddd",
+  },
+  sheetScroll: {
     overflowY: "auto",
-    padding: "20px 16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  divider: {
-    border: "none",
-    borderTop: "1px solid #e8e8e8",
-    margin: 0,
-  },
-  mapPanel: {
+    padding: "0 16px 32px",
     flex: 1,
-    overflow: "hidden",
   },
-  statusBox: {
+  sheetCenter: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "12px 0",
+    padding: "16px 20px 32px",
+  },
+  sheetHint: {
+    fontSize: 14,
+    color: "#666",
   },
   spinner: {
     width: 18,
@@ -140,13 +166,10 @@ const styles: Record<string, CSSProperties> = {
     animation: "spin 0.8s linear infinite",
     flexShrink: 0,
   },
-  statusText: {
-    fontSize: 14,
-    color: "#666",
-  },
   errorBox: {
+    margin: "8px 16px 24px",
     backgroundColor: "#ffebee",
-    borderRadius: 8,
+    borderRadius: 10,
     padding: "12px 14px",
     color: "#c62828",
     fontSize: 14,

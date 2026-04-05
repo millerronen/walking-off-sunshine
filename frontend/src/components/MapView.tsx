@@ -31,7 +31,9 @@ export function MapView({ routes, selectedTier }: Props) {
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
+      zoomControl: false,
       gestureHandling: "greedy",
+      clickableIcons: false,
     });
   }, [mapsReady]);
 
