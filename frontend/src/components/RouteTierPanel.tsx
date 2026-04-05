@@ -27,10 +27,9 @@ function shadePercent(score: number): string {
 
 function buildGoogleMapsUrl(polyline: ShadeRoute["polyline"]): string {
   if (polyline.length < 2) return "https://maps.google.com";
+  const origin = `${polyline[0].lat},${polyline[0].lon}`;
   const destination = `${polyline[polyline.length - 1].lat},${polyline[polyline.length - 1].lon}`;
-  // Omit origin so Google Maps uses the user's current GPS location.
-  // dir_action=navigate only triggers navigation mode (not preview) when origin is omitted.
-  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=walking&dir_action=navigate`;
+  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
 
 export function RouteTierPanel({
