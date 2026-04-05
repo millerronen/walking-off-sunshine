@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import org.locationtech.jts.geom.Coordinate
 import org.locationtech.jts.geom.GeometryFactory
 import org.locationtech.jts.geom.Polygon
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
@@ -33,6 +34,7 @@ class BuildingFetcher(
     @Value("\${overpass.urls}") private val overpassUrlsCsv: String,
     @Value("\${shadow.default-building-height}") private val defaultHeight: Double,
 ) {
+    private val log = LoggerFactory.getLogger(BuildingFetcher::class.java)
     private val geometryFactory = GeometryFactory()
     private val overpassUrls by lazy { overpassUrlsCsv.split(",").map { it.trim() } }
 
@@ -64,7 +66,7 @@ class BuildingFetcher(
 
         // Try each mirror in order, return first success
         for (url in overpassUrls) {
-            val response = runCatching {
+            val result = runCatching {
                 webClient.post()
                     .uri(url)
                     .bodyValue(encoded)
@@ -72,14 +74,20 @@ class BuildingFetcher(
                     .retrieve()
                     .bodyToMono(OverpassResponse::class.java)
                     .block()
-            }.getOrNull()
+            }
 
+            result.onFailure { log.error("Overpass request to $url failed: ${it.message}") }
+
+            val response = result.getOrNull()
             if (response != null) {
-                return response.elements.mapNotNull { it.toBuilding(geometryFactory, defaultHeight) }
+                val buildings = response.elements.mapNotNull { it.toBuilding(geometryFactory, defaultHeight) }
+                log.info("Tile ($s,$w): fetched ${response.elements.size} elements → ${buildings.size} buildings from $url")
+                return buildings
             }
         }
 
-        return emptyList()  // all mirrors failed — degrade gracefully
+        log.warn("All Overpass mirrors failed for tile ($s,$w)")
+        return emptyList()
     }
 
     /** Returns all tile keys that overlap the given bounding box. */

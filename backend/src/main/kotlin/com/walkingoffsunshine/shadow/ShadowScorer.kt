@@ -9,6 +9,7 @@ import com.walkingoffsunshine.sun.SunPositionService
 import org.locationtech.jts.geom.Coordinate
 import org.locationtech.jts.geom.GeometryFactory
 import org.locationtech.jts.geom.Polygon
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.ZonedDateTime
@@ -21,6 +22,7 @@ class ShadowScorer(
     @Value("\${shadow.building-fetch-buffer-meters}") private val bufferMeters: Double,
     @Value("\${shadow.samples-per-segment}") private val samplesPerSegment: Int,
 ) {
+    private val log = LoggerFactory.getLogger(ShadowScorer::class.java)
     private val geometryFactory = GeometryFactory()
 
     /**
@@ -43,6 +45,7 @@ class ShadowScorer(
         val bbox = polyline.boundingBox(bufferMeters)
         val buildings = buildingFetcher.fetchBuildings(bbox.south, bbox.west, bbox.north, bbox.east)
         val shadowPolygons = buildings.mapNotNull { it.shadowPolygon(sunPos) }
+        log.info("sun elev=${"%.1f".format(sunPos.elevation)}° az=${"%.1f".format(sunPos.azimuth)}° | buildings=${buildings.size} shadowPolygons=${shadowPolygons.size}")
 
         return polyline.zipWithNext().map { (from, to) ->
             val dist = haversineMeters(from, to)
