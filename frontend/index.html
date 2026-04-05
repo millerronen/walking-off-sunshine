@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HolechBaTzel</title>
+    <link rel="preconnect" href="https://maps.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://maps.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://maps.googleapis.com" />
+    <link rel="dns-prefetch" href="https://maps.gstatic.com" />
     <style>
       * {
         box-sizing: border-box;
@@ -27,7 +31,7 @@
         script.src =
           "https://maps.googleapis.com/maps/api/js?key=" +
           key +
-          "&libraries=places&callback=__googleMapsReady";
+          "&libraries=places&callback=__googleMapsReady&loading=async";
         script.async = true;
         script.defer = true;
         // Expose a promise so React components can await Maps readiness
