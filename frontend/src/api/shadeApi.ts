@@ -7,7 +7,8 @@ import type { RoutesRequest, RoutesResponse } from "../types";
 export async function fetchShadeRoutes(
   request: RoutesRequest
 ): Promise<RoutesResponse> {
-  const response = await fetch(`/api/routes`, {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "";
+  const response = await fetch(`${base}/api/routes`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
