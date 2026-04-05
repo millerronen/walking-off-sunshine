@@ -27,18 +27,10 @@ function shadePercent(score: number): string {
 
 function buildGoogleMapsUrl(polyline: ShadeRoute["polyline"]): string {
   if (polyline.length < 2) return "https://maps.google.com";
-  const origin = `${polyline[0].lat},${polyline[0].lon}`;
   const destination = `${polyline[polyline.length - 1].lat},${polyline[polyline.length - 1].lon}`;
-  // Sample up to 8 intermediate waypoints evenly to stay within URL limits
-  const inner = polyline.slice(1, -1);
-  const step = Math.max(1, Math.floor(inner.length / 8));
-  const waypoints = inner
-    .filter((_, i) => i % step === 0)
-    .slice(0, 8)
-    .map((p) => `${p.lat},${p.lon}`)
-    .join("|");
-  const base = "https://www.google.com/maps/dir/?api=1";
-  return `${base}&origin=${origin}&destination=${destination}&travelmode=walking&dir_action=navigate${waypoints ? `&waypoints=${waypoints}` : ""}`;
+  // Omit origin so Google Maps uses the user's current GPS location.
+  // dir_action=navigate only triggers navigation mode (not preview) when origin is omitted.
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=walking&dir_action=navigate`;
 }
 
 export function RouteTierPanel({
