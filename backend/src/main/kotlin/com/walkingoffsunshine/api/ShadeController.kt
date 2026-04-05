@@ -3,6 +3,7 @@ package com.walkingoffsunshine.api
 import com.walkingoffsunshine.routes.GoogleRoutesClient
 import com.walkingoffsunshine.shadow.ShadowScorer
 import com.walkingoffsunshine.shadow.haversineMeters
+import org.springframework.web.bind.annotation.CrossOrigin
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -12,6 +13,7 @@ import kotlin.math.cos
 import kotlin.math.sqrt
 import org.slf4j.LoggerFactory
 
+@CrossOrigin(origins = ["*"])
 @RestController
 @RequestMapping("/api")
 class ShadeController(
