@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Editor / OS artifacts
+.DS_Store
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# TypeScript cache
+*.tsbuildinfo

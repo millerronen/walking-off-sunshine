@@ -1,0 +1,18 @@
+# Secrets
+.env
+*.env
+
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store

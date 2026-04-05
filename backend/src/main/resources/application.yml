@@ -1,0 +1,22 @@
+server:
+  port: ${PORT:8080}
+
+google:
+  maps:
+    api-key: ${GOOGLE_MAPS_API_KEY}
+
+overpass:
+  # Comma-separated mirrors tried in order
+  urls: https://overpass.kumi.systems/api/interpreter,https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter
+
+shadow:
+  # Default height (meters) for buildings missing height tags
+  default-building-height: 10.0
+  # Meters to expand bbox when fetching buildings around a path
+  building-fetch-buffer-meters: 100
+  # Number of sample points per path segment for shade scoring
+  samples-per-segment: 10
+
+spring:
+  jackson:
+    default-property-inclusion: non_null

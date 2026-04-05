@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Walking Off Sunshine</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body,
+      #root {
+        height: 100%;
+        width: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+    </style>
+    <!-- Google Maps JS API loaded after Vite injects the env variable -->
+    <script>
+      // Build the Maps script tag dynamically so we can use the env var at runtime
+      (function () {
+        const key = "%VITE_GOOGLE_MAPS_API_KEY%";
+        const script = document.createElement("script");
+        script.src =
+          "https://maps.googleapis.com/maps/api/js?key=" +
+          key +
+          "&libraries=places&callback=__googleMapsReady";
+        script.async = true;
+        script.defer = true;
+        // Expose a promise so React components can await Maps readiness
+        window.__googleMapsReady = function () {
+          if (window.__googleMapsReadyResolve) {
+            window.__googleMapsReadyResolve();
+          }
+        };
+        window.__googleMapsReadyPromise = new Promise(function (resolve) {
+          window.__googleMapsReadyResolve = resolve;
+        });
+        document.head.appendChild(script);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
