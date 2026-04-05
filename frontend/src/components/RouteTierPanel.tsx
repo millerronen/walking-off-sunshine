@@ -68,7 +68,7 @@ export function RouteTierPanel({
                 }}
               >
                 <span style={styles.badgeText}>
-                  {route.tierPercent}%
+                  {route.tierPercent === 100 ? "#1" : route.tierPercent === 75 ? "#2" : route.tierPercent === 50 ? "#3" : "#4"}
                 </span>
               </div>
 

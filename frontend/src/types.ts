@@ -49,8 +49,8 @@ export const TIER_COLORS: Record<TierPercent, string> = {
 };
 
 export const TIER_LABELS: Record<TierPercent, string> = {
-  25: "25% Shaded",
-  50: "50% Shaded",
-  75: "75% Shaded",
-  100: "Fully Shaded",
+  25: "Least Shaded",
+  50: "Fair",
+  75: "Good",
+  100: "Best",
 };
