@@ -38,7 +38,7 @@ function buildGoogleMapsUrl(polyline: ShadeRoute["polyline"]): string {
     .map((p) => `${p.lat},${p.lon}`)
     .join("|");
   const base = "https://www.google.com/maps/dir/?api=1";
-  return `${base}&origin=${origin}&destination=${destination}&travelmode=walking${waypoints ? `&waypoints=${waypoints}` : ""}`;
+  return `${base}&origin=${origin}&destination=${destination}&travelmode=walking&dir_action=navigate${waypoints ? `&waypoints=${waypoints}` : ""}`;
 }
 
 export function RouteTierPanel({
