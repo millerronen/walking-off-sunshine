@@ -1,0 +1,14 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg
+      - VITE_GOOGLE_MAPS_API_KEY=${_VITE_GOOGLE_MAPS_API_KEY}
+      - -t
+      - ${_IMAGE}
+      - .
+substitutions:
+  _IMAGE: europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/frontend:latest
+  _VITE_GOOGLE_MAPS_API_KEY: ''
+images:
+  - ${_IMAGE}
