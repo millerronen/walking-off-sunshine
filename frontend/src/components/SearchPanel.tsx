@@ -46,6 +46,8 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
 
   const [originPlace, setOriginPlace] =
     useState<google.maps.places.PlaceResult | null>(null);
+  const [originGpsLatLon, setOriginGpsLatLon] = useState<LatLon | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [destPlace, setDestPlace] =
     useState<google.maps.places.PlaceResult | null>(null);
   const [useNow, setUseNow] = useState(true);
@@ -90,11 +92,42 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     return { lat: loc.lat(), lon: loc.lng() };
   }
 
+  function handleGps() {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by your browser.");
+      return;
+    }
+    setGpsLoading(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const latLon: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setOriginGpsLatLon(latLon);
+        setGpsLoading(false);
+        if (originInputRef.current) originInputRef.current.value = "My Location";
+        // Reverse geocode to show a readable address
+        window.__googleMapsReadyPromise.then(() => {
+          const geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ location: { lat: latLon.lat, lng: latLon.lon } }, (results, status) => {
+            if (status === "OK" && results?.[0] && originInputRef.current) {
+              originInputRef.current.value = results[0].formatted_address;
+            }
+          });
+        });
+      },
+      () => {
+        setGpsLoading(false);
+        setError("Could not get your location. Please check location permissions.");
+      },
+      { timeout: 10000 }
+    );
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
 
-    const origin = extractLatLon(originPlace, "origin");
+    const origin = originGpsLatLon ?? extractLatLon(originPlace, "origin");
     if (typeof origin === "string") {
       setError(origin);
       return;
@@ -122,14 +155,26 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
         <label style={styles.label} htmlFor="origin-input">
           Origin
         </label>
-        <input
-          id="origin-input"
-          ref={originInputRef}
-          type="text"
-          placeholder="Start location"
-          style={styles.input}
-          required
-        />
+        <div style={styles.inputRow}>
+          <input
+            id="origin-input"
+            ref={originInputRef}
+            type="text"
+            placeholder="Start location"
+            style={{ ...styles.input, flex: 1 }}
+            onChange={() => setOriginGpsLatLon(null)}
+            required
+          />
+          <button
+            type="button"
+            onClick={handleGps}
+            style={styles.gpsBtn}
+            title="Use my current location"
+            disabled={gpsLoading}
+          >
+            {gpsLoading ? "…" : "⌖"}
+          </button>
+        </div>
       </div>
 
       <div style={styles.fieldGroup}>
@@ -224,6 +269,24 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
     transition: "border-color 0.15s",
     width: "100%",
+  },
+  inputRow: {
+    display: "flex",
+    gap: 6,
+    alignItems: "center",
+  },
+  gpsBtn: {
+    flexShrink: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    border: "1.5px solid #ddd",
+    backgroundColor: "#fff",
+    fontSize: 18,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   nowRow: {
     display: "flex",
