@@ -25,6 +25,22 @@ function shadePercent(score: number): string {
   return Math.round(score * 100) + "%";
 }
 
+function buildGoogleMapsUrl(polyline: ShadeRoute["polyline"]): string {
+  if (polyline.length < 2) return "https://maps.google.com";
+  const origin = `${polyline[0].lat},${polyline[0].lon}`;
+  const destination = `${polyline[polyline.length - 1].lat},${polyline[polyline.length - 1].lon}`;
+  // Sample up to 8 intermediate waypoints evenly to stay within URL limits
+  const inner = polyline.slice(1, -1);
+  const step = Math.max(1, Math.floor(inner.length / 8));
+  const waypoints = inner
+    .filter((_, i) => i % step === 0)
+    .slice(0, 8)
+    .map((p) => `${p.lat},${p.lon}`)
+    .join("|");
+  const base = "https://www.google.com/maps/dir/?api=1";
+  return `${base}&origin=${origin}&destination=${destination}&travelmode=walking${waypoints ? `&waypoints=${waypoints}` : ""}`;
+}
+
 export function RouteTierPanel({
   routes,
   selectedTier,
@@ -90,10 +106,16 @@ export function RouteTierPanel({
                 </div>
               </div>
 
-              {/* Selection indicator */}
-              {isSelected && (
-                <div style={{ ...styles.selectedDot, backgroundColor: color }} />
-              )}
+              {/* Navigate button */}
+              <a
+                href={buildGoogleMapsUrl(route.polyline)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...styles.navigateBtn, borderColor: color, color }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                ↗
+              </a>
             </button>
           );
         })}
@@ -172,10 +194,18 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     color: "#555",
   },
-  selectedDot: {
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
+  navigateBtn: {
     flexShrink: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: "1.5px solid",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 16,
+    fontWeight: 700,
+    textDecoration: "none",
+    background: "transparent",
   },
 };
