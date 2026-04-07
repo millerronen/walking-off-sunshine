@@ -3,12 +3,17 @@ steps:
     args:
       - build
       - --build-arg
-      - VITE_GOOGLE_MAPS_API_KEY=${_VITE_GOOGLE_MAPS_API_KEY}
+      - VITE_GOOGLE_MAPS_API_KEY=$$VITE_GOOGLE_MAPS_API_KEY
       - -t
       - ${_IMAGE}
       - .
+    secretEnv:
+      - VITE_GOOGLE_MAPS_API_KEY
 substitutions:
   _IMAGE: europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/frontend:latest
-  _VITE_GOOGLE_MAPS_API_KEY: ''
+availableSecrets:
+  secretManager:
+    - versionName: projects/walking-off-sunshine/secrets/VITE_GOOGLE_MAPS_API_KEY/versions/latest
+      env: VITE_GOOGLE_MAPS_API_KEY
 images:
   - ${_IMAGE}
