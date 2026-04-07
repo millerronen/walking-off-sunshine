@@ -21,3 +21,7 @@ dist/
 # Capacitor
 frontend/ios/App/Pods/
 frontend/ios/.xcode.env.local
+frontend/android/local.properties
+
+# Claude Code
+.claude/
