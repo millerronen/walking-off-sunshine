@@ -14,6 +14,7 @@ export default function App() {
   const [originAddress, setOriginAddress] = useState("");
   const [destAddress, setDestAddress] = useState("");
   const [usingGpsOrigin, setUsingGpsOrigin] = useState(false);
+  const [gpsOriginLatLon, setGpsOriginLatLon] = useState<LatLon | null>(null);
   const [sheetExpanded, setSheetExpanded] = useState(false);
 
   async function handleSearch(origin: LatLon, destination: LatLon, datetime: string, originAddr: string, destAddr: string, gpsOrigin: boolean) {
@@ -25,6 +26,7 @@ export default function App() {
     setOriginAddress(originAddr);
     setDestAddress(destAddr);
     setUsingGpsOrigin(gpsOrigin);
+    setGpsOriginLatLon(gpsOrigin ? origin : null);
 
     try {
       const data = await fetchShadeRoutes({ origin, destination, datetime });
@@ -44,7 +46,7 @@ export default function App() {
     <div style={styles.shell}>
       {/* Full-screen map */}
       <div style={styles.mapLayer}>
-        <MapView routes={routes} selectedTier={selectedTier} />
+        <MapView routes={routes} selectedTier={selectedTier} gpsOrigin={gpsOriginLatLon} />
       </div>
 
       {/* Top search card */}

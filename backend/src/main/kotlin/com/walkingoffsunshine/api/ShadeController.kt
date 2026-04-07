@@ -140,7 +140,7 @@ private fun routeKey(route: com.walkingoffsunshine.routes.CandidateRoute): Strin
  * Two offsets (left/right) at two distances give 4 candidate detour routes.
  */
 private fun perpendicularWaypoints(origin: LatLon, destination: LatLon, directDistanceM: Double): List<LatLon> {
-    val offsetM = (directDistanceM * 0.3).coerceIn(200.0, 500.0)
+    val offsetM = (directDistanceM * 0.3).coerceIn(30.0, 500.0)
 
     // Direction vector in degrees
     val dLat = destination.lat - origin.lat

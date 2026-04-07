@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { ShadeRoute, TierPercent } from "../types";
+import type { LatLon, ShadeRoute, TierPercent } from "../types";
 import { TIER_COLORS } from "../types";
 
 interface Props {
   routes: ShadeRoute[];
   selectedTier: TierPercent | null;
+  gpsOrigin?: LatLon | null;
 }
 
-export function MapView({ routes, selectedTier }: Props) {
+export function MapView({ routes, selectedTier, gpsOrigin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const polylinesRef = useRef<
-    Map<TierPercent, google.maps.Polyline>
-  >(new Map());
+  const polylinesRef = useRef<Map<TierPercent, google.maps.Polyline>>(new Map());
+  const gpsMarkerRef = useRef<google.maps.Marker | null>(null);
   const [mapsReady, setMapsReady] = useState(false);
 
   // Wait for Maps API to be available
@@ -76,6 +76,41 @@ export function MapView({ routes, selectedTier }: Props) {
 
     mapRef.current.fitBounds(bounds, { top: 60, right: 40, bottom: 40, left: 40 });
   }, [routes, selectedTier]);
+
+  // Show / update blue GPS origin marker
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (!gpsOrigin) {
+      gpsMarkerRef.current?.setMap(null);
+      gpsMarkerRef.current = null;
+      return;
+    }
+    const pos = { lat: gpsOrigin.lat, lng: gpsOrigin.lon };
+    if (!gpsMarkerRef.current) {
+      gpsMarkerRef.current = new google.maps.Marker({
+        position: pos,
+        map: mapRef.current,
+        title: "Your location",
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: "#4285F4",
+          fillOpacity: 1,
+          strokeColor: "#fff",
+          strokeWeight: 2,
+        },
+        zIndex: 999,
+      });
+    } else {
+      gpsMarkerRef.current.setPosition(pos);
+      gpsMarkerRef.current.setMap(mapRef.current);
+    }
+    // Pan to GPS position if no routes yet
+    if (routes.length === 0) {
+      mapRef.current.panTo(pos);
+      mapRef.current.setZoom(16);
+    }
+  }, [gpsOrigin, routes.length]);
 
   // Update polyline appearance when selectedTier changes without redrawing
   useEffect(() => {

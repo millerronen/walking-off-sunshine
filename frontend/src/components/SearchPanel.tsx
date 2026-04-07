@@ -28,6 +28,14 @@ declare global {
   }
 }
 
+function toLocalDatetimeValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" +
+    pad(date.getDate()) + "T" + pad(date.getHours()) + ":" + pad(date.getMinutes())
+  );
+}
+
 export function SearchPanel({ onSearch, isLoading }: Props) {
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
@@ -36,6 +44,8 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     useState<google.maps.places.PlaceResult | null>(null);
   const [destPlace, setDestPlace] =
     useState<google.maps.places.PlaceResult | null>(null);
+  const [useNow, setUseNow] = useState(true);
+  const [datetimeValue, setDatetimeValue] = useState(() => toLocalDatetimeValue(new Date()));
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
 
@@ -87,7 +97,8 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
         }
         const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
         const origin: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        onSearch(origin, destination, new Date().toISOString(), "", destAddress, true);
+        const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
+        onSearch(origin, destination, dt, "", destAddress, true);
       } catch (err) {
         console.error("Geolocation error:", err);
         setError("Could not get your location. Enter a starting point or check Settings → Privacy → Location Services.");
@@ -99,7 +110,8 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
       const origin = extractLatLon(originPlace, "origin");
       if (typeof origin === "string") { setError(origin); return; }
       const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
-      onSearch(origin, destination, new Date().toISOString(), originAddress, destAddress, false);
+      const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
+      onSearch(origin, destination, dt, originAddress, destAddress, false);
     }
   }
 
@@ -138,6 +150,32 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
             required
           />
         </div>
+      </div>
+
+      {/* Time picker */}
+      <div style={styles.timeRow}>
+        <button
+          type="button"
+          style={{ ...styles.timeChip, ...(useNow ? styles.timeChipActive : {}) }}
+          onClick={() => setUseNow(true)}
+        >
+          Now
+        </button>
+        <button
+          type="button"
+          style={{ ...styles.timeChip, ...(!useNow ? styles.timeChipActive : {}) }}
+          onClick={() => { setUseNow(false); }}
+        >
+          Choose time
+        </button>
+        {!useNow && (
+          <input
+            type="datetime-local"
+            value={datetimeValue}
+            onChange={e => setDatetimeValue(e.target.value)}
+            style={styles.timeInput}
+          />
+        )}
       </div>
 
       {error && <p style={styles.error}>{error}</p>}
@@ -206,6 +244,38 @@ const styles: Record<string, CSSProperties> = {
   inputOptional: {
     fontSize: 13,
     color: "#888",
+  },
+  timeRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  timeChip: {
+    padding: "5px 12px",
+    borderRadius: 20,
+    border: "1.5px solid #ddd",
+    background: "transparent",
+    fontSize: 13,
+    cursor: "pointer",
+    color: "#555",
+    fontWeight: 500,
+  },
+  timeChipActive: {
+    borderColor: "#2E7D32",
+    color: "#2E7D32",
+    backgroundColor: "#E8F5E9",
+    fontWeight: 600,
+  },
+  timeInput: {
+    flex: 1,
+    minWidth: 0,
+    border: "1.5px solid #ddd",
+    borderRadius: 8,
+    padding: "4px 8px",
+    fontSize: 13,
+    color: "#1a1a1a",
+    outline: "none",
   },
   error: {
     fontSize: 12,

@@ -38,6 +38,9 @@ function buildNavigateUrl(originAddress: string, destAddress: string, usingGpsOr
     // saddr specified → route planning mode → shows Preview (user taps Start manually)
     return `comgooglemaps://?saddr=${encodeURIComponent(originAddress)}&daddr=${destination}&directionsmode=walking`;
   }
+  if (usingGpsOrigin) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=walking`;
+  }
   const origin = encodeURIComponent(originAddress);
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
