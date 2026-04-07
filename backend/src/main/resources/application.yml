@@ -16,7 +16,7 @@ shadow:
   # Default height (meters) for buildings missing height tags
   default-building-height: 10.0
   # Default height (meters) for trees missing height tags (mature Tel Aviv street trees)
-  default-tree-height: 7.0
+  default-tree-height: 4.0
   # Meters to expand bbox when fetching buildings around a path
   building-fetch-buffer-meters: 100
   # Number of sample points per path segment for shade scoring
