@@ -4,6 +4,7 @@ import com.walkingoffsunshine.api.LatLon
 import com.walkingoffsunshine.api.ScoredSegment
 import com.walkingoffsunshine.buildings.Building
 import com.walkingoffsunshine.buildings.BuildingFetcher
+import com.walkingoffsunshine.buildings.TreeFetcher
 import com.walkingoffsunshine.sun.SunPosition
 import com.walkingoffsunshine.sun.SunPositionService
 import org.locationtech.jts.geom.Coordinate
@@ -19,6 +20,7 @@ import kotlin.math.*
 class ShadowScorer(
     private val sunPositionService: SunPositionService,
     private val buildingFetcher: BuildingFetcher,
+    private val treeFetcher: TreeFetcher,
     @Value("\${shadow.building-fetch-buffer-meters}") private val bufferMeters: Double,
     @Value("\${shadow.samples-per-segment}") private val samplesPerSegment: Int,
 ) {
@@ -44,8 +46,9 @@ class ShadowScorer(
 
         val bbox = polyline.boundingBox(bufferMeters)
         val buildings = buildingFetcher.fetchBuildings(bbox.south, bbox.west, bbox.north, bbox.east)
-        val shadowPolygons = buildings.mapNotNull { it.shadowPolygon(sunPos) }
-        log.info("sun elev=${"%.1f".format(sunPos.elevation)}° az=${"%.1f".format(sunPos.azimuth)}° | buildings=${buildings.size} shadowPolygons=${shadowPolygons.size}")
+        val trees = treeFetcher.fetchTrees(bbox.south, bbox.west, bbox.north, bbox.east)
+        val shadowPolygons = (buildings + trees).mapNotNull { it.shadowPolygon(sunPos) }
+        log.info("sun elev=${"%.1f".format(sunPos.elevation)}° az=${"%.1f".format(sunPos.azimuth)}° | buildings=${buildings.size} trees=${trees.size} shadowPolygons=${shadowPolygons.size}")
 
         return polyline.zipWithNext().map { (from, to) ->
             val dist = haversineMeters(from, to)

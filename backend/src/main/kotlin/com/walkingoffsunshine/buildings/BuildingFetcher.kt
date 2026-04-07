@@ -21,16 +21,32 @@ data class Building(
  * Tile size in degrees. ~500m x ~500m at TLV latitude — small enough for fast Overpass
  * queries, large enough that a typical walking route hits only a handful of tiles.
  */
-private const val TILE_SIZE_DEG = 0.005
+internal const val TILE_SIZE_DEG = 0.005
 
 /** Snaps a coordinate down to the nearest tile origin. */
-private fun snapToTile(coord: Double): Double = Math.floor(coord / TILE_SIZE_DEG) * TILE_SIZE_DEG
+internal fun snapToTile(coord: Double): Double = Math.floor(coord / TILE_SIZE_DEG) * TILE_SIZE_DEG
+
+/** Returns all tile keys that overlap the given bounding box. */
+internal fun tilesFor(south: Double, west: Double, north: Double, east: Double): List<TileKey> {
+    val tiles = mutableListOf<TileKey>()
+    var lat = snapToTile(south)
+    while (lat <= north) {
+        var lon = snapToTile(west)
+        while (lon <= east) {
+            tiles.add(TileKey(lat, lon))
+            lon += TILE_SIZE_DEG
+        }
+        lat += TILE_SIZE_DEG
+    }
+    return tiles
+}
 
 data class TileKey(val southTile: Double, val westTile: Double)
 
 @Service
 class BuildingFetcher(
     private val webClient: WebClient,
+    private val gcsTileStore: GcsTileStore,
     @Value("\${overpass.urls}") private val overpassUrlsCsv: String,
     @Value("\${shadow.default-building-height}") private val defaultHeight: Double,
 ) {
@@ -44,15 +60,20 @@ class BuildingFetcher(
      * requests within the same instance are instant.
      */
     private val tileCache = java.util.concurrent.ConcurrentHashMap<TileKey, List<Building>>()
+    private val tileExecutor = java.util.concurrent.Executors.newCachedThreadPool()
 
     /**
      * Returns all buildings covering a bounding box, fetching any uncached tiles from Overpass.
+     * Uncached tiles are fetched in parallel to minimise cold-start latency.
      */
     fun fetchBuildings(south: Double, west: Double, north: Double, east: Double): List<Building> {
         val tiles = tilesFor(south, west, north, east)
-        return tiles.flatMap { tile ->
-            tileCache.getOrPut(tile) { fetchTile(tile) }
-        }.distinctBy { it.footprint.toText() }   // deduplicate buildings that span tile borders
+        val futures = tiles.map { tile ->
+            java.util.concurrent.CompletableFuture.supplyAsync({
+                tileCache[tile] ?: fetchTile(tile).also { if (it.isNotEmpty()) tileCache[tile] = it }
+            }, tileExecutor)
+        }
+        return futures.flatMap { it.get() }.distinctBy { it.footprint.toText() }
     }
 
     private fun fetchTile(tile: TileKey): List<Building> {
@@ -61,10 +82,18 @@ class BuildingFetcher(
         val n = s + TILE_SIZE_DEG
         val e = w + TILE_SIZE_DEG
 
+        // 1. Try GCS persistent cache
+        val gcsResponse = gcsTileStore.read("buildings", tile, OverpassResponse::class.java)
+        if (gcsResponse != null) {
+            val buildings = gcsResponse.elements.mapNotNull { it.toBuilding(geometryFactory, defaultHeight) }
+            log.info("Tile ($s,$w): ${buildings.size} buildings from GCS cache")
+            return buildings
+        }
+
+        // 2. Try Overpass mirrors
         val query = "[out:json][timeout:20];way[\"building\"]($s,$w,$n,$e);out body geom;"
         val encoded = "data=${java.net.URLEncoder.encode(query, "UTF-8")}"
 
-        // Try each mirror in order, return first success
         for (url in overpassUrls) {
             val result = runCatching {
                 webClient.post()
@@ -82,6 +111,8 @@ class BuildingFetcher(
             if (response != null) {
                 val buildings = response.elements.mapNotNull { it.toBuilding(geometryFactory, defaultHeight) }
                 log.info("Tile ($s,$w): fetched ${response.elements.size} elements → ${buildings.size} buildings from $url")
+                // 3. Write to GCS for future use
+                gcsTileStore.write("buildings", tile, response)
                 return buildings
             }
         }
@@ -90,20 +121,6 @@ class BuildingFetcher(
         return emptyList()
     }
 
-    /** Returns all tile keys that overlap the given bounding box. */
-    private fun tilesFor(south: Double, west: Double, north: Double, east: Double): List<TileKey> {
-        val tiles = mutableListOf<TileKey>()
-        var lat = snapToTile(south)
-        while (lat <= north) {
-            var lon = snapToTile(west)
-            while (lon <= east) {
-                tiles.add(TileKey(lat, lon))
-                lon += TILE_SIZE_DEG
-            }
-            lat += TILE_SIZE_DEG
-        }
-        return tiles
-    }
 }
 
 // ---------- Overpass JSON parsing ----------

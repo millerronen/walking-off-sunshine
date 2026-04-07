@@ -1,5 +1,7 @@
 package com.walkingoffsunshine
 
+import com.google.cloud.storage.Storage
+import com.google.cloud.storage.StorageOptions
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -18,11 +20,14 @@ class Application {
             .trustManager(InsecureTrustManagerFactory.INSTANCE)
             .build()
         val httpClient = reactor.netty.http.client.HttpClient.create()
-            .responseTimeout(java.time.Duration.ofSeconds(20))
+            .responseTimeout(java.time.Duration.ofSeconds(5))
             .secure { it.sslContext(sslContext) }
         val connector = org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient)
         return WebClient.builder().clientConnector(connector).build()
     }
+
+    @Bean
+    fun googleCloudStorage(): Storage = StorageOptions.getDefaultInstance().service
 }
 
 fun main(args: Array<String>) {

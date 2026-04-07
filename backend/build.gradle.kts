@@ -26,6 +26,8 @@ dependencies {
     implementation("org.locationtech.jts:jts-core:1.19.0")                  // geometry: polygons, intersection
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.8.1")
+    implementation(platform("com.google.cloud:libraries-bom:26.43.0"))
+    implementation("com.google.cloud:google-cloud-storage")                  // GCS tile cache
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
