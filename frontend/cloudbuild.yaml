@@ -3,7 +3,7 @@ steps:
     args:
       - build
       - --build-arg
-      - VITE_GOOGLE_MAPS_API_KEY=$$VITE_GOOGLE_MAPS_API_KEY
+      - VITE_GOOGLE_MAPS_API_KEY
       - -t
       - ${_IMAGE}
       - .
