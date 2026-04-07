@@ -6,7 +6,6 @@ interface Props {
   routes: ShadeRoute[];
   selectedTier: TierPercent | null;
   onSelectTier: (tier: TierPercent | null) => void;
-  shortestDistanceMeters: number;
   originAddress: string;
   destAddress: string;
   usingGpsOrigin: boolean;
@@ -49,23 +48,33 @@ export function RouteTierPanel({
   routes,
   selectedTier,
   onSelectTier,
-  shortestDistanceMeters,
   originAddress,
   destAddress,
   usingGpsOrigin,
 }: Props) {
   if (routes.length === 0) return null;
 
+  const shadiest = routes.find((r) => r.tierPercent === 100) ?? null;
+
   return (
     <div style={styles.panel}>
       <h2 style={styles.heading}>Route Options</h2>
-      <p style={styles.shortest}>
-        Shortest distance: {formatDistance(shortestDistanceMeters)}
-      </p>
       <div style={styles.list}>
-        {routes.map((route) => {
+        {routes.map((route, idx) => {
           const color = TIER_COLORS[route.tierPercent];
           const isSelected = selectedTier === route.tierPercent;
+
+          // Delta line: only on the shortest route card, compared to shadiest
+          let deltaLine: string | null = null;
+          if (route.tierPercent === 25 && shadiest) {
+            const minSaved = Math.round((shadiest.durationSeconds - route.durationSeconds) / 60);
+            const shadeLost = Math.round((shadiest.shadeScore - route.shadeScore) * 100);
+            const parts: string[] = [];
+            if (minSaved > 0) parts.push(`saves ${minSaved} min`);
+            if (shadeLost > 0) parts.push(`${shadeLost}% less shade`);
+            if (parts.length > 0) deltaLine = parts.join(" · ");
+          }
+
           return (
             <button
               key={route.tierPercent}
@@ -77,49 +86,30 @@ export function RouteTierPanel({
                   ? `0 0 0 2px ${color}`
                   : "0 1px 3px rgba(0,0,0,0.08)",
               }}
-              onClick={() =>
-                onSelectTier(
-                  isSelected ? null : route.tierPercent
-                )
-              }
+              onClick={() => onSelectTier(isSelected ? null : route.tierPercent)}
             >
-              {/* Tier badge */}
-              <div
-                style={{
-                  ...styles.badge,
-                  backgroundColor: color,
-                }}
-              >
-                <span style={styles.badgeText}>
-                  {route.tierPercent === 100 ? "#1" : route.tierPercent === 75 ? "#2" : route.tierPercent === 50 ? "#3" : "#4"}
-                </span>
+              {/* Badge */}
+              <div style={{ ...styles.badge, backgroundColor: color }}>
+                <span style={styles.badgeText}>#{idx + 1}</span>
               </div>
 
               {/* Route info */}
               <div style={styles.info}>
-                <p style={styles.tierLabel}>
-                  {TIER_LABELS[route.tierPercent]}
-                </p>
+                <p style={styles.tierLabel}>{TIER_LABELS[route.tierPercent]}</p>
                 <div style={styles.stats}>
-                  <span style={styles.stat}>
-                    🌿 {shadePercent(route.shadeScore)} shade
-                  </span>
-                  <span style={styles.stat}>
-                    📍 {formatDistance(route.distanceMeters)}
-                  </span>
-                  <span style={styles.stat}>
-                    🕒 {formatDuration(route.durationSeconds)}
-                  </span>
+                  <span style={styles.stat}>🌿 {shadePercent(route.shadeScore)} shade</span>
+                  <span style={styles.stat}>📍 {formatDistance(route.distanceMeters)}</span>
+                  <span style={styles.stat}>🕒 {formatDuration(route.durationSeconds)}</span>
                 </div>
+                {deltaLine && <p style={styles.delta}>{deltaLine}</p>}
               </div>
 
-              {/* Navigate button — opens native Maps app via system handler */}
+              {/* Navigate button */}
               <button
                 style={{ ...styles.navigateBtn, borderColor: color, color }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  const url = buildNavigateUrl(originAddress, destAddress, usingGpsOrigin);
-                  window.open(url, "_system");
+                  window.open(buildNavigateUrl(originAddress, destAddress, usingGpsOrigin), "_system");
                 }}
               >
                 ↗
@@ -201,6 +191,12 @@ const styles: Record<string, CSSProperties> = {
   stat: {
     fontSize: 12,
     color: "#555",
+  },
+  delta: {
+    marginTop: 4,
+    fontSize: 11,
+    color: "#1565C0",
+    fontWeight: 500,
   },
   navigateBtn: {
     flexShrink: 0,

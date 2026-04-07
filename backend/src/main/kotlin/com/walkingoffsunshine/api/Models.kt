@@ -42,6 +42,8 @@ data class RouteResponse(
     /** Up to 4 tiers: best route achieving ≥25, ≥50, ≥75, 100% shade (within +30% distance) */
     val routes: List<ShadeTierRoute>,
     val shortestDistanceMeters: Double,
+    /** Non-null when current weather overrides shade scores (rain or heavy overcast) */
+    val weatherNote: String? = null,
 )
 
 data class ShadeTierRoute(

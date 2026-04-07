@@ -3,12 +3,16 @@ package com.walkingoffsunshine.api
 import com.walkingoffsunshine.routes.GoogleRoutesClient
 import com.walkingoffsunshine.shadow.ShadowScorer
 import com.walkingoffsunshine.shadow.haversineMeters
+import com.walkingoffsunshine.weather.WeatherCondition
+import com.walkingoffsunshine.weather.WeatherService
 import org.springframework.web.bind.annotation.CrossOrigin
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sqrt
 import org.slf4j.LoggerFactory
@@ -19,6 +23,7 @@ import org.slf4j.LoggerFactory
 class ShadeController(
     private val shadowScorer: ShadowScorer,
     private val googleRoutesClient: GoogleRoutesClient,
+    private val weatherService: WeatherService,
 ) {
     private val log = LoggerFactory.getLogger(ShadeController::class.java)
 
@@ -77,9 +82,18 @@ class ShadeController(
     fun findRoutes(@RequestBody request: RouteRequest): RouteResponse {
         val dt = request.datetime ?: ZonedDateTime.now()
 
+        // Check live weather only when the requested time is within 2 hours of now
+        val hoursFromNow = abs(ChronoUnit.HOURS.between(ZonedDateTime.now(), dt))
+        val weatherCondition = if (hoursFromNow < 2) weatherService.getCondition(request.origin) else WeatherCondition.CLEAR
+        val weatherNote: String? = when (weatherCondition) {
+            WeatherCondition.RAIN -> "It's raining — shade scores overridden to 100%"
+            WeatherCondition.OVERCAST -> "Heavy cloud cover — routes are effectively fully shaded"
+            WeatherCondition.CLEAR -> null
+        }
+
         val directCandidates = googleRoutesClient.fetchWalkingRoutes(request.origin, request.destination)
         if (directCandidates.isEmpty()) {
-            return RouteResponse(routes = emptyList(), shortestDistanceMeters = 0.0)
+            return RouteResponse(routes = emptyList(), shortestDistanceMeters = 0.0, weatherNote = weatherNote)
         }
 
         val shortestDistance = directCandidates.minOf { it.distanceMeters }.toDouble()
@@ -100,32 +114,46 @@ class ShadeController(
 
         log.info("candidates after dedup=${candidates.size} maxAllowed=${maxAllowedDistance}m")
 
-        // Score all candidates that are within the 30% distance budget
+        // Score all candidates within the distance budget
+        val overrideShade = weatherCondition != WeatherCondition.CLEAR
         val scored = candidates
             .filter { it.distanceMeters <= maxAllowedDistance }
             .map { candidate ->
                 val segments = shadowScorer.scorePolyline(candidate.polyline, dt)
                 val totalDist = segments.sumOf { it.distanceMeters }
-                val shade = if (totalDist == 0.0) 0.0 else
-                    segments.sumOf { it.shadeScore * it.distanceMeters } / totalDist
+                val shade = if (overrideShade) 1.0
+                    else if (totalDist == 0.0) 0.0
+                    else segments.sumOf { it.shadeScore * it.distanceMeters } / totalDist
                 Triple(candidate, shade, totalDist)
             }
-            .sortedByDescending { (_, shade, _) -> shade }
 
-        // Return all scored routes (up to 4), ranked by shade descending.
-        // Assign tier labels by rank: shadiest → 100, next → 75, 50, 25.
-        val tierLabels = listOf(100, 75, 50, 25)
-        val tierRoutes = scored.take(4).mapIndexed { idx, (candidate, shade, dist) ->
-            ShadeTierRoute(
-                tierPercent = tierLabels[idx],
-                shadeScore = shade,
-                distanceMeters = dist,
-                durationSeconds = candidate.durationSeconds,
-                polyline = candidate.polyline,
-            )
+        // Always return exactly 2 routes: shadiest and shortest.
+        // Skip the shortest if it's the same route as the shadiest.
+        val shadiest = scored.maxByOrNull { (_, shade, _) -> shade }
+        val shortest = scored.minByOrNull { (candidate, _, _) -> candidate.distanceMeters }
+
+        val tierRoutes = buildList {
+            if (shadiest != null) {
+                add(ShadeTierRoute(
+                    tierPercent = 100,
+                    shadeScore = shadiest.second,
+                    distanceMeters = shadiest.third,
+                    durationSeconds = shadiest.first.durationSeconds,
+                    polyline = shadiest.first.polyline,
+                ))
+            }
+            if (shortest != null && shadiest != null && routeKey(shortest.first) != routeKey(shadiest.first)) {
+                add(ShadeTierRoute(
+                    tierPercent = 25,
+                    shadeScore = shortest.second,
+                    distanceMeters = shortest.third,
+                    durationSeconds = shortest.first.durationSeconds,
+                    polyline = shortest.first.polyline,
+                ))
+            }
         }
 
-        return RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance)
+        return RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = weatherNote)
     }
 }
 

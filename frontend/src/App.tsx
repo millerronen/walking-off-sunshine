@@ -9,13 +9,13 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [routes, setRoutes] = useState<ShadeRoute[]>([]);
-  const [shortestDistance, setShortestDistance] = useState(0);
   const [selectedTier, setSelectedTier] = useState<TierPercent | null>(null);
   const [originAddress, setOriginAddress] = useState("");
   const [destAddress, setDestAddress] = useState("");
   const [usingGpsOrigin, setUsingGpsOrigin] = useState(false);
   const [gpsOriginLatLon, setGpsOriginLatLon] = useState<LatLon | null>(null);
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [weatherNote, setWeatherNote] = useState<string | null>(null);
 
   async function handleSearch(origin: LatLon, destination: LatLon, datetime: string, originAddr: string, destAddr: string, gpsOrigin: boolean) {
     setStatus("loading");
@@ -27,11 +27,12 @@ export default function App() {
     setDestAddress(destAddr);
     setUsingGpsOrigin(gpsOrigin);
     setGpsOriginLatLon(gpsOrigin ? origin : null);
+    setWeatherNote(null);
 
     try {
       const data = await fetchShadeRoutes({ origin, destination, datetime });
       setRoutes(data.routes);
-      setShortestDistance(data.shortestDistanceMeters);
+      setWeatherNote(data.weatherNote ?? null);
       setStatus("success");
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
@@ -83,6 +84,13 @@ export default function App() {
             </div>
           )}
 
+          {/* Weather banner */}
+          {hasResults && weatherNote && (
+            <div style={styles.weatherBanner}>
+              🌧️ {weatherNote}
+            </div>
+          )}
+
           {/* Results */}
           {hasResults && (
             <div style={styles.sheetScroll}>
@@ -93,7 +101,6 @@ export default function App() {
                   setSelectedTier(tier);
                   setSheetExpanded(false);
                 }}
-                shortestDistanceMeters={shortestDistance}
                 originAddress={originAddress}
                 destAddress={destAddress}
                 usingGpsOrigin={usingGpsOrigin}
@@ -185,5 +192,16 @@ const styles: Record<string, CSSProperties> = {
     color: "#c62828",
     fontSize: 14,
     border: "1px solid #ffcdd2",
+  },
+  weatherBanner: {
+    margin: "4px 16px 0",
+    backgroundColor: "#E3F2FD",
+    borderRadius: 10,
+    padding: "10px 14px",
+    color: "#1565C0",
+    fontSize: 13,
+    fontWeight: 500,
+    border: "1px solid #BBDEFB",
+    flexShrink: 0,
   },
 };

@@ -24,6 +24,8 @@ export interface ShadeRoute {
 export interface RoutesResponse {
   routes: ShadeRoute[];
   shortestDistanceMeters: number;
+  /** Non-null when current weather overrides shade scores (rain or heavy overcast) */
+  weatherNote?: string;
 }
 
 /** Request body for POST /api/routes */
@@ -42,15 +44,15 @@ export type AppStatus = "idle" | "loading" | "success" | "error";
 
 /** Colours used to draw each tier's polyline on the map */
 export const TIER_COLORS: Record<TierPercent, string> = {
-  25: "#FFC107",   // amber / yellow
-  50: "#FF7043",   // deep orange
-  75: "#66BB6A",   // medium green
-  100: "#1B5E20",  // dark green
+  25: "#1565C0",   // blue — shortest route
+  50: "#FF7043",   // deep orange (unused in 2-route mode)
+  75: "#66BB6A",   // medium green (unused in 2-route mode)
+  100: "#1B5E20",  // dark green — shadiest route
 };
 
 export const TIER_LABELS: Record<TierPercent, string> = {
-  25: "Least Shaded",
+  25: "Shortest Route",
   50: "Fair",
   75: "Good",
-  100: "Best",
+  100: "Most Shaded",
 };
