@@ -190,11 +190,7 @@ class ShadeController(
     }
 }
 
-private fun weatherNoteFor(condition: WeatherCondition): String? = when (condition) {
-    WeatherCondition.RAIN -> "It's raining outside — you might want to grab an umbrella"
-    WeatherCondition.OVERCAST -> "It's overcast — no direct sun expected on your walk"
-    WeatherCondition.CLEAR -> null
-}
+private fun weatherNoteFor(condition: WeatherCondition): String? = null
 
 private fun routeCacheKey(origin: LatLon, destination: LatLon, dt: ZonedDateTime): String {
     val o = "%.4f,%.4f".format(origin.lat, origin.lon)
