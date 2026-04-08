@@ -108,6 +108,14 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     });
   }, []);
 
+  function isTooClose(a: LatLon, b: LatLon): boolean {
+    const R = 6371000;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLon = (b.lon - a.lon) * Math.PI / 180;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h)) < 50; // within 50 metres
+  }
+
   function extractLatLon(place: google.maps.places.PlaceResult | null, label: string): LatLon | string {
     const loc = place?.geometry?.location;
     if (!loc) return `Select a valid ${label} from the suggestions.`;
@@ -164,11 +172,19 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         setError("Could not get your location. Enter a starting point or check Settings → Privacy → Location Services.");
         return;
       }
+      if (isTooClose(origin, destination)) {
+        setError("Your starting point and destination are the same. Please choose a different destination.");
+        return;
+      }
       const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
       onSearch(origin, destination, dt, "", destAddress, true);
     } else {
       const origin = extractLatLon(originPlace, "origin");
       if (typeof origin === "string") { setError(origin); return; }
+      if (isTooClose(origin, destination)) {
+        setError("Your starting point and destination are the same. Please choose a different destination.");
+        return;
+      }
       const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
       const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
       onSearch(origin, destination, dt, originAddress, destAddress, false);
