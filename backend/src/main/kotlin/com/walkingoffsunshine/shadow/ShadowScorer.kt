@@ -44,11 +44,14 @@ class ShadowScorer(
             return buildNightSegments(polyline)
         }
 
+        val t0 = System.currentTimeMillis()
         val bbox = polyline.boundingBox(bufferMeters)
         val buildings = buildingFetcher.fetchBuildings(bbox.south, bbox.west, bbox.north, bbox.east)
+        val t1 = System.currentTimeMillis()
         val trees = treeFetcher.fetchTrees(bbox.south, bbox.west, bbox.north, bbox.east)
+        val t2 = System.currentTimeMillis()
         val shadowPolygons = (buildings + trees).mapNotNull { it.shadowPolygon(sunPos) }
-        log.info("sun elev=${"%.1f".format(sunPos.elevation)}° az=${"%.1f".format(sunPos.azimuth)}° | buildings=${buildings.size} trees=${trees.size} shadowPolygons=${shadowPolygons.size}")
+        log.info("SCORE buildings=${t1-t0}ms trees=${t2-t1}ms | b=${buildings.size} t=${trees.size} shadows=${shadowPolygons.size}")
 
         return polyline.zipWithNext().map { (from, to) ->
             val dist = haversineMeters(from, to)

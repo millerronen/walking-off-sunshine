@@ -26,13 +26,17 @@ class TreeFetcher(
     private val overpassUrls by lazy { overpassUrlsCsv.split(",").map { it.trim() } }
     private val tileCache = java.util.concurrent.ConcurrentHashMap<TileKey, List<Building>>()
     private val tileExecutor = java.util.concurrent.Executors.newCachedThreadPool()
+    private val tileInFlight = java.util.concurrent.ConcurrentHashMap<TileKey, java.util.concurrent.CompletableFuture<List<Building>>>()
 
     fun fetchTrees(south: Double, west: Double, north: Double, east: Double): List<Building> {
         val tiles = tilesFor(south, west, north, east)
         val futures = tiles.map { tile ->
-            java.util.concurrent.CompletableFuture.supplyAsync({
-                tileCache[tile] ?: fetchTile(tile).also { if (it.isNotEmpty()) tileCache[tile] = it }
-            }, tileExecutor)
+            tileCache[tile]?.let { java.util.concurrent.CompletableFuture.completedFuture(it) }
+                ?: tileInFlight.computeIfAbsent(tile) {
+                    java.util.concurrent.CompletableFuture.supplyAsync({
+                        fetchTile(tile).also { tileCache[tile] = it }
+                    }, tileExecutor).also { f -> f.whenComplete { _, _ -> tileInFlight.remove(tile) } }
+                }
         }
         return futures.flatMap { it.get() }.distinctBy { it.footprint.toText() }
     }
