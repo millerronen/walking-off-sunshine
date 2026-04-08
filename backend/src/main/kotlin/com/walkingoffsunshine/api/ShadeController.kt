@@ -191,8 +191,8 @@ class ShadeController(
 }
 
 private fun weatherNoteFor(condition: WeatherCondition): String? = when (condition) {
-    WeatherCondition.RAIN -> "It's raining — shade scores overridden to 100%"
-    WeatherCondition.OVERCAST -> "Heavy cloud cover — routes are effectively fully shaded"
+    WeatherCondition.RAIN -> "It's raining outside — you might want to grab an umbrella"
+    WeatherCondition.OVERCAST -> "It's overcast — no direct sun expected on your walk"
     WeatherCondition.CLEAR -> null
 }
 

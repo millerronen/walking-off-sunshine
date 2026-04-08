@@ -115,7 +115,7 @@ export default function App() {
           {/* Weather banner */}
           {hasResults && weatherNote && (
             <div style={styles.weatherBanner}>
-              🌧️ {weatherNote}
+              {weatherNote}
             </div>
           )}
 
