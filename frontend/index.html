@@ -23,6 +23,15 @@
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
+      /* Google Places autocomplete dropdown is appended to <body> and can be wider
+         than the viewport, causing the whole page to scroll horizontally on iOS.
+         Clamp it to the screen width and hide any overflow. */
+      .pac-container {
+        max-width: calc(100vw - 24px) !important;
+        box-sizing: border-box !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+      }
     </style>
     <!-- Google Maps JS API loaded after Vite injects the env variable -->
     <script>
