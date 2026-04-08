@@ -50,6 +50,8 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [showOrigin, setShowOrigin] = useState(false);
+  const [destHasText, setDestHasText] = useState(false);
+  const [originHasText, setOriginHasText] = useState(false);
 
   type GpsState = "acquiring" | "ready" | "denied" | "error";
   const [gpsState, setGpsState] = useState<GpsState>("acquiring");
@@ -83,7 +85,8 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     if (!destInputRef.current) return;
     if (pickedDest) {
       destInputRef.current.value = pickedDest.label;
-      setDestPlace(null); // autocomplete result no longer relevant
+      setDestHasText(true);
+      setDestPlace(null);
     }
   }, [pickedDest]);
 
@@ -114,7 +117,21 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   function handleUseGps() {
     setShowOrigin(false);
     setOriginPlace(null);
+    setOriginHasText(false);
     if (originInputRef.current) originInputRef.current.value = "";
+  }
+
+  function clearDest() {
+    onClearPickedDest();
+    setDestPlace(null);
+    setDestHasText(false);
+    if (destInputRef.current) { destInputRef.current.value = ""; destInputRef.current.focus(); }
+  }
+
+  function clearOrigin() {
+    setOriginPlace(null);
+    setOriginHasText(false);
+    if (originInputRef.current) { originInputRef.current.value = ""; originInputRef.current.focus(); }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -185,12 +202,18 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
           placeholder="Starting point"
           style={styles.originInput}
           onChange={() => {
-            if (!originInputRef.current?.value.trim()) setOriginPlace(null);
+            const v = originInputRef.current?.value ?? "";
+            setOriginHasText(v.trim().length > 0);
+            if (!v.trim()) setOriginPlace(null);
           }}
         />
-        <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
-          Use my location
-        </button>
+        {originHasText ? (
+          <button type="button" style={styles.clearBtn} onClick={clearOrigin}>✕</button>
+        ) : (
+          <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
+            Use my location
+          </button>
+        )}
       </div>
 
       {/* Destination */}
@@ -201,18 +224,14 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
           placeholder="Where to?"
           style={styles.destInput}
           onChange={() => {
-            if (!destInputRef.current?.value.trim()) {
-              setDestPlace(null);
-              onClearPickedDest();
-            }
+            const v = destInputRef.current?.value ?? "";
+            setDestHasText(v.trim().length > 0);
+            if (!v.trim()) { setDestPlace(null); onClearPickedDest(); }
           }}
           required
         />
-        {pickedDest ? (
-          <button type="button" style={styles.clearPickBtn} onClick={() => {
-            onClearPickedDest();
-            if (destInputRef.current) destInputRef.current.value = "";
-          }}>✕</button>
+        {destHasText ? (
+          <button type="button" style={styles.clearBtn} onClick={clearDest}>✕</button>
         ) : (
           <button type="button" style={styles.mapPickBtn} onClick={onPickDestOnMap}>📍</button>
         )}
@@ -314,15 +333,16 @@ const styles: Record<string, CSSProperties> = {
     padding: "0 2px",
     lineHeight: 1,
   },
-  clearPickBtn: {
+  clearBtn: {
     flexShrink: 0,
     background: "none",
     border: "none",
     fontSize: 14,
     color: "#aaa",
     cursor: "pointer",
-    padding: "0 2px",
+    padding: "4px 6px",
     lineHeight: 1,
+    borderRadius: 99,
   },
 
   originHint: {
