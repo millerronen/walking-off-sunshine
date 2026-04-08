@@ -6,13 +6,17 @@ interface Props {
   routes: ShadeRoute[];
   selectedTier: TierPercent | null;
   gpsOrigin?: LatLon | null;
+  pickingDest?: boolean;
+  onMapPick?: (latLon: LatLon, label: string) => void;
 }
 
-export function MapView({ routes, selectedTier, gpsOrigin }: Props) {
+export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const polylinesRef = useRef<Map<TierPercent, google.maps.Polyline>>(new Map());
   const gpsMarkerRef = useRef<google.maps.Marker | null>(null);
+  const pickMarkerRef = useRef<google.maps.Marker | null>(null);
+  const pickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const [mapsReady, setMapsReady] = useState(false);
 
   // Wait for Maps API to be available
@@ -112,6 +116,55 @@ export function MapView({ routes, selectedTier, gpsOrigin }: Props) {
     }
   }, [gpsOrigin, routes.length]);
 
+  // Pick-on-map mode: click to drop / drag a destination pin
+  useEffect(() => {
+    if (!mapRef.current || !mapsReady) return;
+
+    if (!pickingDest) {
+      // Clean up
+      if (pickListenerRef.current) { google.maps.event.removeListener(pickListenerRef.current); pickListenerRef.current = null; }
+      pickMarkerRef.current?.setMap(null);
+      pickMarkerRef.current = null;
+      mapRef.current.getDiv().style.cursor = "";
+      return;
+    }
+
+    mapRef.current.getDiv().style.cursor = "crosshair";
+
+    const geocoder = new google.maps.Geocoder();
+    const placePin = (latLng: google.maps.LatLng) => {
+      if (!mapRef.current) return;
+      if (!pickMarkerRef.current) {
+        pickMarkerRef.current = new google.maps.Marker({
+          map: mapRef.current,
+          draggable: true,
+          animation: google.maps.Animation.DROP,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#2E7D32", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+        });
+        pickMarkerRef.current.addListener("dragend", () => {
+          const pos = pickMarkerRef.current!.getPosition()!;
+          placePin(pos);
+        });
+      }
+      pickMarkerRef.current.setPosition(latLng);
+
+      geocoder.geocode({ location: latLng }, (results, status) => {
+        const label = status === "OK" && results?.[0]
+          ? results[0].formatted_address
+          : `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
+        onMapPick?.({ lat: latLng.lat(), lon: latLng.lng() }, label);
+      });
+    };
+
+    pickListenerRef.current = mapRef.current.addListener("click", (e: google.maps.MapMouseEvent) => {
+      if (e.latLng) placePin(e.latLng);
+    });
+
+    return () => {
+      if (pickListenerRef.current) { google.maps.event.removeListener(pickListenerRef.current); pickListenerRef.current = null; }
+    };
+  }, [pickingDest, mapsReady]);
+
   // Update polyline appearance when selectedTier changes without redrawing
   useEffect(() => {
     polylinesRef.current.forEach((pl, tier) => {
@@ -128,6 +181,11 @@ export function MapView({ routes, selectedTier, gpsOrigin }: Props) {
       {!mapsReady && (
         <div style={styles.loadingOverlay}>
           <p style={styles.loadingText}>Loading map…</p>
+        </div>
+      )}
+      {pickingDest && (
+        <div style={styles.pickHint}>
+          Tap the map to set your destination
         </div>
       )}
       <div ref={containerRef} style={styles.map} />
@@ -157,5 +215,21 @@ const styles: Record<string, CSSProperties> = {
   loadingText: {
     fontSize: 16,
     color: "#888",
+  },
+  pickHint: {
+    position: "absolute",
+    top: 12,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 30,
+    backgroundColor: "#2E7D32",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 600,
+    padding: "8px 18px",
+    borderRadius: 20,
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
   },
 };

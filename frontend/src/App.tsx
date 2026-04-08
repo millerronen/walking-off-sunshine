@@ -19,6 +19,8 @@ export default function App() {
   const [gpsOriginLatLon, setGpsOriginLatLon] = useState<LatLon | null>(null);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [weatherNote, setWeatherNote] = useState<string | null>(null);
+  const [pickingDest, setPickingDest] = useState(false);
+  const [pickedDest, setPickedDest] = useState<{ latLon: LatLon; label: string } | null>(null);
 
   useEffect(() => {
     if (status !== "loading") { setLoadingSeconds(0); return; }
@@ -28,6 +30,8 @@ export default function App() {
 
   async function handleSearch(origin: LatLon, destination: LatLon, datetime: string, originAddr: string, destAddr: string, gpsOrigin: boolean) {
     lastSearchRef.current = [origin, destination, datetime, originAddr, destAddr, gpsOrigin];
+    setPickingDest(false);
+    setPickedDest(null);
     setStatus("loading");
     setErrorMessage(null);
     setIsTimeoutError(false);
@@ -60,12 +64,24 @@ export default function App() {
     <div style={styles.shell}>
       {/* Full-screen map */}
       <div style={styles.mapLayer}>
-        <MapView routes={routes} selectedTier={selectedTier} gpsOrigin={gpsOriginLatLon} />
+        <MapView
+          routes={routes}
+          selectedTier={selectedTier}
+          gpsOrigin={gpsOriginLatLon}
+          pickingDest={pickingDest}
+          onMapPick={(latLon, label) => { setPickedDest({ latLon, label }); setPickingDest(false); }}
+        />
       </div>
 
       {/* Top search card */}
       <div style={styles.topCard}>
-        <SearchPanel onSearch={handleSearch} isLoading={status === "loading"} />
+        <SearchPanel
+          onSearch={handleSearch}
+          isLoading={status === "loading"}
+          pickedDest={pickedDest}
+          onPickDestOnMap={() => setPickingDest(true)}
+          onClearPickedDest={() => setPickedDest(null)}
+        />
       </div>
 
       {/* Bottom sheet */}

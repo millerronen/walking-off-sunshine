@@ -18,6 +18,9 @@ interface Props {
     usingGpsOrigin: boolean
   ) => void;
   isLoading: boolean;
+  pickedDest: { latLon: LatLon; label: string } | null;
+  onPickDestOnMap: () => void;
+  onClearPickedDest: () => void;
 }
 
 declare global {
@@ -36,7 +39,7 @@ function toLocalDatetimeValue(date: Date): string {
   );
 }
 
-export function SearchPanel({ onSearch, isLoading }: Props) {
+export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest }: Props) {
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,6 +78,15 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     gpsFetchPromise.current = fetchGps();
   }, []);
 
+  // Sync map-picked destination into the input field
+  useEffect(() => {
+    if (!destInputRef.current) return;
+    if (pickedDest) {
+      destInputRef.current.value = pickedDest.label;
+      setDestPlace(null); // autocomplete result no longer relevant
+    }
+  }, [pickedDest]);
+
   // Set up dest autocomplete once on mount
   useEffect(() => {
     window.__googleMapsReadyPromise.then(() => {
@@ -110,10 +122,12 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     e.preventDefault();
     setError(null);
 
-    const destination = extractLatLon(destPlace, "destination");
+    const destination: LatLon | string = pickedDest
+      ? pickedDest.latLon
+      : extractLatLon(destPlace, "destination");
     if (typeof destination === "string") { setError(destination); return; }
 
-    const destAddress = destPlace?.formatted_address ?? destInputRef.current?.value ?? "";
+    const destAddress = pickedDest?.label ?? destPlace?.formatted_address ?? destInputRef.current?.value ?? "";
     const originIsEmpty = !showOrigin || !originInputRef.current?.value.trim();
 
     if (originIsEmpty) {
@@ -182,8 +196,22 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
           type="text"
           placeholder="Where to?"
           style={styles.destInput}
+          onChange={() => {
+            if (!destInputRef.current?.value.trim()) {
+              setDestPlace(null);
+              onClearPickedDest();
+            }
+          }}
           required
         />
+        {pickedDest ? (
+          <button type="button" style={styles.clearPickBtn} onClick={() => {
+            onClearPickedDest();
+            if (destInputRef.current) destInputRef.current.value = "";
+          }}>✕</button>
+        ) : (
+          <button type="button" style={styles.mapPickBtn} onClick={onPickDestOnMap}>📍</button>
+        )}
       </div>
 
       {/* Origin hint */}
@@ -256,15 +284,37 @@ const styles: Record<string, CSSProperties> = {
     backgroundColor: "#f5f5f5",
     borderRadius: 12,
     padding: "11px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
   },
   destInput: {
-    width: "100%",
+    flex: 1,
     border: "none",
     background: "transparent",
     fontSize: 16,
     outline: "none",
     color: "#1a1a1a",
-    boxSizing: "border-box",
+    minWidth: 0,
+  },
+  mapPickBtn: {
+    flexShrink: 0,
+    background: "none",
+    border: "none",
+    fontSize: 18,
+    cursor: "pointer",
+    padding: "0 2px",
+    lineHeight: 1,
+  },
+  clearPickBtn: {
+    flexShrink: 0,
+    background: "none",
+    border: "none",
+    fontSize: 14,
+    color: "#aaa",
+    cursor: "pointer",
+    padding: "0 2px",
+    lineHeight: 1,
   },
 
   originHint: {
