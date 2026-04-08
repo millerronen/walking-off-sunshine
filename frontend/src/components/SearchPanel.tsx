@@ -171,7 +171,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       let origin = prefetchedGps.current;
       if (!origin) {
         if (gpsState === "denied") {
-          setError("Location access denied. Go to Settings → WalkingOffSunshine → Location and allow access, or enter a starting point.");
+          setError("Location access denied. Go to Settings → Umbra → Location and allow access, or enter a starting point.");
           return;
         }
         setLocating(true);
@@ -212,7 +212,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       {/* Header */}
       <div style={styles.header}>
         <span style={styles.sun}>☀️</span>
-        <span style={styles.title}>WalkingOffSunshine</span>
+        <span style={styles.title}>Walking Off Sunshine</span>
       </div>
 
       {/* Origin (optional, hidden by default) — always rendered so transition is smooth */}
