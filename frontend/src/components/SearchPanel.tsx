@@ -388,7 +388,7 @@ const styles: Record<string, CSSProperties> = {
     minWidth: 0,
     border: "none",
     background: "transparent",
-    fontSize: 14,
+    fontSize: 16, // must be ≥16px or iOS auto-zooms the viewport on focus
     outline: "none",
     color: "#1a1a1a",
   },
@@ -433,7 +433,7 @@ const styles: Record<string, CSSProperties> = {
     border: "1.5px solid #ddd",
     borderRadius: 8,
     padding: "4px 8px",
-    fontSize: 13,
+    fontSize: 16, // must be ≥16px or iOS auto-zooms the viewport on focus
     color: "#1a1a1a",
     outline: "none",
   },

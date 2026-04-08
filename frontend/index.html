@@ -23,6 +23,12 @@
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
+      /* Prevent iOS from auto-zooming the viewport when any input is focused.
+         iOS zooms if font-size < 16px — set a floor globally. */
+      input, select, textarea {
+        font-size: max(16px, 1em) !important;
+      }
+
       /* Google Places autocomplete dropdown is appended to <body> with position:absolute
          and can extend past the right edge of the viewport, causing iOS to scroll
          the whole page horizontally. position:fixed takes it out of document flow
