@@ -148,11 +148,13 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
       }
       pickMarkerRef.current.setPosition(latLng);
 
-      geocoder.geocode({ location: latLng }, (results, status) => {
-        const label = status === "OK" && results?.[0]
-          ? results[0].formatted_address
-          : `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
+      geocoder.geocode({ location: latLng }).then((res) => {
+        const label = res.results?.[0]?.formatted_address
+          ?? `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
         onMapPick?.({ lat: latLng.lat(), lon: latLng.lng() }, label);
+      }).catch(() => {
+        onMapPick?.({ lat: latLng.lat(), lon: latLng.lng() },
+          `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`);
       });
     };
 
