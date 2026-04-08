@@ -88,13 +88,16 @@ class ShadeController(
      */
     @PostMapping("/routes")
     fun findRoutes(@RequestBody request: RouteRequest): RouteResponse {
+        val t0 = System.currentTimeMillis()
+        fun ms() = System.currentTimeMillis() - t0
+
         val dt = request.datetime ?: ZonedDateTime.now()
 
         // Return cached response if available (same origin/dest/hour, within 20 min)
         val cacheKey = routeCacheKey(request.origin, request.destination, dt)
         routeCache[cacheKey]?.let { (timestamp, cached) ->
             if (System.currentTimeMillis() - timestamp < CACHE_TTL_MS) {
-                log.info("Cache hit: $cacheKey")
+                log.info("TIMING cache_hit total=${ms()}ms")
                 return cached
             }
             routeCache.remove(cacheKey)
@@ -109,6 +112,7 @@ class ShadeController(
 
         // Fetch direct routes (blocks, but weather runs alongside it)
         val directCandidates = googleRoutesClient.fetchWalkingRoutes(request.origin, request.destination)
+        log.info("TIMING direct_routes=${ms()}ms count=${directCandidates.size}")
         if (directCandidates.isEmpty()) {
             return RouteResponse(routes = emptyList(), shortestDistanceMeters = 0.0,
                 weatherNote = weatherNoteFor(weatherFuture.get()))
@@ -119,32 +123,30 @@ class ShadeController(
 
         // Resolve weather now (already in-flight alongside direct route fetch, so near-instant)
         val weatherCondition = weatherFuture.get()
+        log.info("TIMING weather=${ms()}ms condition=$weatherCondition")
         val weatherNote = weatherNoteFor(weatherCondition)
 
         // Circuit breaker: if rain/overcast, all routes are equally shaded — skip waypoint fetches
         val waypointCandidates = if (weatherCondition != WeatherCondition.CLEAR) {
-            log.info("Weather override active — skipping waypoint route fetches")
+            log.info("TIMING weather_override — skipping waypoints and scoring")
             emptyList()
         } else {
             val waypointFutures = perpendicularWaypoints(request.origin, request.destination, shortestDistance).map { wp ->
                 CompletableFuture.supplyAsync({
                     googleRoutesClient.fetchWalkingRouteViaWaypoint(request.origin, wp, request.destination)
-                        .also { r -> log.info("Waypoint $wp → ${if (r == null) "null" else "${r.distanceMeters}m, ${r.polyline.size} pts"}") }
                 }, executor)
             }
-            waypointFutures.mapNotNull { it.get() }
+            waypointFutures.mapNotNull { it.get() }.also {
+                log.info("TIMING waypoint_routes=${ms()}ms count=${it.size}")
+            }
         }
 
-        log.info("directCandidates=${directCandidates.size} waypointCandidates=${waypointCandidates.size}")
-
         val candidates = (directCandidates + waypointCandidates).distinctBy { routeKey(it) }
-        log.info("candidates after dedup=${candidates.size} maxAllowed=${maxAllowedDistance}m")
 
         // Circuit breaker: if weather overrides shade (rain/overcast), skip building+tree scoring entirely
         val overrideShade = weatherCondition != WeatherCondition.CLEAR
         val filtered = candidates.filter { it.distanceMeters <= maxAllowedDistance }
         val scored: List<Triple<com.walkingoffsunshine.routes.CandidateRoute, Double, Double>> = if (overrideShade) {
-            log.info("Weather override active — skipping shadow scoring")
             filtered.map { Triple(it, 1.0, it.distanceMeters.toDouble()) }
         } else {
             val scoreFutures = filtered.map { candidate ->
@@ -156,7 +158,9 @@ class ShadeController(
                     Triple(candidate, shade, totalDist)
                 }, executor)
             }
-            scoreFutures.map { it.get() }
+            scoreFutures.map { it.get() }.also {
+                log.info("TIMING shadow_scoring=${ms()}ms candidates=${filtered.size}")
+            }
         }
 
         // Always return exactly 2 routes: shadiest and shortest.
@@ -186,6 +190,7 @@ class ShadeController(
 
         val response = RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = weatherNote)
         routeCache[cacheKey] = Pair(System.currentTimeMillis(), response)
+        log.info("TIMING total=${ms()}ms routes=${tierRoutes.size}")
         return response
     }
 }
