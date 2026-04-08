@@ -46,6 +46,12 @@ export default function App() {
 
     try {
       const data = await fetchShadeRoutes({ origin, destination, datetime });
+      if (data.routes.length === 0) {
+        setErrorMessage("No walking route found between these locations. Please check the addresses and try again.");
+        setIsTimeoutError(false);
+        setStatus("error");
+        return;
+      }
       setRoutes(data.routes);
       setWeatherNote(data.weatherNote ?? null);
       setStatus("success");

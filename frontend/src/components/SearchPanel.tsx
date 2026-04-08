@@ -116,9 +116,22 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     return 2 * R * Math.asin(Math.sqrt(h)) < 50; // within 50 metres
   }
 
+  // Types that are too broad to be a meaningful walking start/end point
+  const TOO_BROAD_TYPES = new Set([
+    "country", "administrative_area_level_1", "administrative_area_level_2",
+    "administrative_area_level_3", "colloquial_area",
+  ]);
+
   function extractLatLon(place: google.maps.places.PlaceResult | null, label: string): LatLon | string {
     const loc = place?.geometry?.location;
-    if (!loc) return `Select a valid ${label} from the suggestions.`;
+    if (!loc) return `Please select a ${label} from the dropdown suggestions.`;
+
+    // Reject if the only types are country / state / region level — too vague for routing
+    const types = place.types ?? [];
+    if (types.length > 0 && types.every(t => TOO_BROAD_TYPES.has(t))) {
+      return `That ${label} is too broad (e.g. a country or region). Please enter a specific street or place.`;
+    }
+
     return { lat: loc.lat(), lon: loc.lng() };
   }
 
