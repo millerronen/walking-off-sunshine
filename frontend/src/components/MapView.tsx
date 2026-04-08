@@ -24,6 +24,20 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
     window.__googleMapsReadyPromise.then(() => setMapsReady(true));
   }, []);
 
+  // Stop any GPU work while the app is in the background (Page Visibility API).
+  // Disabling gestures when hidden prevents the map from processing touch events
+  // that can wake the GPU on Capacitor's WKWebView.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!mapRef.current) return;
+      mapRef.current.setOptions({
+        gestureHandling: document.hidden ? "none" : "greedy",
+      });
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
   // Initialise the map once the API is ready and the container is mounted
   useEffect(() => {
     if (!mapsReady || !containerRef.current) return;
@@ -38,6 +52,12 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
       zoomControl: false,
       gestureHandling: "greedy",
       clickableIcons: false,
+      // RASTER uses pre-rendered image tiles instead of WebGL vector rendering.
+      // This keeps the GPU idle between interactions — the single biggest battery saving.
+      renderingType: "RASTER" as google.maps.RenderingType,
+      // Disable tilt/rotation — no 3D transforms means less GPU work on pan
+      tilt: 0,
+      rotateControl: false,
     });
   }, [mapsReady]);
 
