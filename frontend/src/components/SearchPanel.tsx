@@ -40,32 +40,70 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
-  const [originPlace, setOriginPlace] =
-    useState<google.maps.places.PlaceResult | null>(null);
-  const [destPlace, setDestPlace] =
-    useState<google.maps.places.PlaceResult | null>(null);
+  const [originPlace, setOriginPlace] = useState<google.maps.places.PlaceResult | null>(null);
+  const [destPlace, setDestPlace] = useState<google.maps.places.PlaceResult | null>(null);
   const [useNow, setUseNow] = useState(true);
   const [datetimeValue, setDatetimeValue] = useState(() => toLocalDatetimeValue(new Date()));
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const [showOrigin, setShowOrigin] = useState(false);
+
+  type GpsState = "acquiring" | "ready" | "denied" | "error";
+  const [gpsState, setGpsState] = useState<GpsState>("acquiring");
+  const prefetchedGps = useRef<LatLon | null>(null);
+  const gpsFetchPromise = useRef<Promise<LatLon | null> | null>(null);
 
   useEffect(() => {
+    const fetchGps = async (): Promise<LatLon | null> => {
+      try {
+        const { location: status } = await Geolocation.checkPermissions();
+        if (status === "denied") { setGpsState("denied"); return null; }
+        if (status === "prompt" || status === "prompt-with-rationale") {
+          const result = await Geolocation.requestPermissions();
+          if (result.location !== "granted") { setGpsState("denied"); return null; }
+        }
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
+        const loc: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        prefetchedGps.current = loc;
+        setGpsState("ready");
+        return loc;
+      } catch {
+        setGpsState("error");
+        return null;
+      }
+    };
+    gpsFetchPromise.current = fetchGps();
+  }, []);
+
+  // Set up dest autocomplete once on mount
+  useEffect(() => {
     window.__googleMapsReadyPromise.then(() => {
-      if (!originInputRef.current || !destInputRef.current) return;
-      const options: google.maps.places.AutocompleteOptions = { types: ["geocode"] };
-
-      const originAC = new google.maps.places.Autocomplete(originInputRef.current, options);
-      originAC.addListener("place_changed", () => setOriginPlace(originAC.getPlace()));
-
-      const destAC = new google.maps.places.Autocomplete(destInputRef.current, options);
+      if (!destInputRef.current) return;
+      const destAC = new google.maps.places.Autocomplete(destInputRef.current, { types: ["geocode"] });
       destAC.addListener("place_changed", () => setDestPlace(destAC.getPlace()));
     });
   }, []);
+
+  // Set up origin autocomplete when the field becomes visible
+  useEffect(() => {
+    if (!showOrigin) return;
+    window.__googleMapsReadyPromise.then(() => {
+      if (!originInputRef.current) return;
+      const originAC = new google.maps.places.Autocomplete(originInputRef.current, { types: ["geocode"] });
+      originAC.addListener("place_changed", () => setOriginPlace(originAC.getPlace()));
+    });
+  }, [showOrigin]);
 
   function extractLatLon(place: google.maps.places.PlaceResult | null, label: string): LatLon | string {
     const loc = place?.geometry?.location;
     if (!loc) return `Select a valid ${label} from the suggestions.`;
     return { lat: loc.lat(), lon: loc.lng() };
+  }
+
+  function handleUseGps() {
+    setShowOrigin(false);
+    setOriginPlace(null);
+    if (originInputRef.current) originInputRef.current.value = "";
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -76,37 +114,29 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     if (typeof destination === "string") { setError(destination); return; }
 
     const destAddress = destPlace?.formatted_address ?? destInputRef.current?.value ?? "";
-    const originIsEmpty = !originInputRef.current?.value.trim();
+    const originIsEmpty = !showOrigin || !originInputRef.current?.value.trim();
 
     if (originIsEmpty) {
-      setLocating(true);
-      try {
-        const { location: status } = await Geolocation.checkPermissions();
-        if (status === "denied") {
+      let origin = prefetchedGps.current;
+      if (!origin) {
+        if (gpsState === "denied") {
           setError("Location access denied. Go to Settings → HolechBaTzel → Location and allow access, or enter a starting point.");
-          setLocating(false);
           return;
         }
-        if (status === "prompt" || status === "prompt-with-rationale") {
-          const result = await Geolocation.requestPermissions();
-          if (result.location !== "granted") {
-            setError("Location access denied. Enter a starting point or enable it in Settings.");
-            setLocating(false);
-            return;
-          }
+        setLocating(true);
+        try {
+          origin = await (gpsFetchPromise.current ?? Promise.resolve(null));
+        } finally {
+          setLocating(false);
         }
-        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
-        const origin: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
-        onSearch(origin, destination, dt, "", destAddress, true);
-      } catch (err) {
-        console.error("Geolocation error:", err);
-        setError("Could not get your location. Enter a starting point or check Settings → Privacy → Location Services.");
-      } finally {
-        setLocating(false);
       }
+      if (!origin) {
+        setError("Could not get your location. Enter a starting point or check Settings → Privacy → Location Services.");
+        return;
+      }
+      const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
+      onSearch(origin, destination, dt, "", destAddress, true);
     } else {
-      // Manual origin mode
       const origin = extractLatLon(originPlace, "origin");
       if (typeof origin === "string") { setError(origin); return; }
       const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
@@ -115,6 +145,7 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
     }
   }
 
+  const gpsDotColor = gpsState === "ready" ? "#4CAF50" : gpsState === "acquiring" ? "#FFA726" : "#bbb";
   const busy = isLoading || locating;
 
   return (
@@ -125,32 +156,48 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
         <span style={styles.title}>HolechBaTzel</span>
       </div>
 
-      {/* Inputs */}
-      <div style={styles.inputsBox}>
-        <div style={styles.inputRow}>
-          <span style={styles.dot} />
+      {/* Origin (optional, hidden by default) */}
+      {showOrigin && (
+        <div style={styles.originRow}>
           <input
             ref={originInputRef}
             type="text"
-            placeholder="From (optional — uses your location)"
-            style={{ ...styles.input, ...styles.inputOptional }}
+            placeholder="Starting point"
+            style={styles.originInput}
+            autoFocus
             onChange={() => {
               if (!originInputRef.current?.value.trim()) setOriginPlace(null);
             }}
           />
+          <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
+            Use my location
+          </button>
         </div>
-        <div style={styles.dividerLine} />
-        <div style={styles.inputRow}>
-          <span style={{ ...styles.dot, backgroundColor: "#2E7D32" }} />
-          <input
-            ref={destInputRef}
-            type="text"
-            placeholder="To"
-            style={styles.input}
-            required
-          />
-        </div>
+      )}
+
+      {/* Destination */}
+      <div style={styles.destRow}>
+        <input
+          ref={destInputRef}
+          type="text"
+          placeholder="Where to?"
+          style={styles.destInput}
+          required
+        />
       </div>
+
+      {/* Origin hint */}
+      {!showOrigin && (
+        <div style={styles.originHint}>
+          <span style={{ ...styles.gpsDot, backgroundColor: gpsDotColor }} />
+          <span style={styles.originHintText}>
+            {gpsState === "acquiring" ? "Locating you…" : gpsState === "ready" ? "From your location" : "Location unavailable"}
+          </span>
+          <button type="button" style={styles.changeBtn} onClick={() => setShowOrigin(true)}>
+            change
+          </button>
+        </div>
+      )}
 
       {/* Time picker */}
       <div style={styles.timeRow}>
@@ -164,7 +211,7 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
         <button
           type="button"
           style={{ ...styles.timeChip, ...(!useNow ? styles.timeChipActive : {}) }}
-          onClick={() => { setUseNow(false); }}
+          onClick={() => setUseNow(false)}
         >
           Choose time
         </button>
@@ -181,7 +228,7 @@ export function SearchPanel({ onSearch, isLoading }: Props) {
       {error && <p style={styles.error}>{error}</p>}
 
       <button type="submit" style={styles.button} disabled={busy}>
-        {locating ? "Getting location…" : busy ? "Searching…" : "Find Shaded Routes"}
+        {locating ? "Getting location…" : isLoading ? "Calculating routes…" : "Find Shaded Routes"}
       </button>
     </form>
   );
@@ -202,49 +249,80 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "center",
     gap: 6,
   },
-  sun: {
-    fontSize: 20,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: "#1a1a1a",
-  },
-  inputsBox: {
+  sun: { fontSize: 20 },
+  title: { fontSize: 15, fontWeight: 700, color: "#1a1a1a" },
+
+  destRow: {
     backgroundColor: "#f5f5f5",
     borderRadius: 12,
-    overflow: "hidden",
+    padding: "11px 14px",
   },
-  inputRow: {
+  destInput: {
+    width: "100%",
+    border: "none",
+    background: "transparent",
+    fontSize: 16,
+    outline: "none",
+    color: "#1a1a1a",
+    boxSizing: "border-box",
+  },
+
+  originHint: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "10px 12px",
+    gap: 6,
+    paddingLeft: 4,
   },
-  dot: {
-    width: 10,
-    height: 10,
+  gpsDot: {
+    width: 8,
+    height: 8,
     borderRadius: "50%",
-    backgroundColor: "#bbb",
     flexShrink: 0,
   },
-  dividerLine: {
-    height: 1,
-    backgroundColor: "#e0e0e0",
-    marginLeft: 32,
+  originHintText: {
+    fontSize: 12,
+    color: "#888",
+    flex: 1,
   },
-  input: {
+  changeBtn: {
+    fontSize: 12,
+    color: "#2E7D32",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
+    fontWeight: 600,
+  },
+
+  originRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 12,
+    padding: "8px 12px",
+  },
+  originInput: {
     flex: 1,
     border: "none",
     background: "transparent",
-    fontSize: 15,
+    fontSize: 14,
     outline: "none",
     color: "#1a1a1a",
   },
-  inputOptional: {
-    fontSize: 13,
-    color: "#888",
+  gpsPill: {
+    flexShrink: 0,
+    fontSize: 11,
+    color: "#2E7D32",
+    background: "#E8F5E9",
+    border: "none",
+    borderRadius: 20,
+    padding: "4px 10px",
+    cursor: "pointer",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
   },
+
   timeRow: {
     display: "flex",
     alignItems: "center",
@@ -281,6 +359,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 12,
     color: "#c62828",
     padding: "0 4px",
+    margin: 0,
   },
   button: {
     padding: "13px 0",

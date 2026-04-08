@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { fetchShadeRoutes } from "./api/shadeApi";
 import { SearchPanel } from "./components/SearchPanel";
 import { MapView } from "./components/MapView";
@@ -8,6 +8,9 @@ import type { AppStatus, LatLon, ShadeRoute, TierPercent } from "./types";
 export default function App() {
   const [status, setStatus] = useState<AppStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isTimeoutError, setIsTimeoutError] = useState(false);
+  const [loadingSeconds, setLoadingSeconds] = useState(0);
+  const lastSearchRef = useRef<Parameters<typeof handleSearch> | null>(null);
   const [routes, setRoutes] = useState<ShadeRoute[]>([]);
   const [selectedTier, setSelectedTier] = useState<TierPercent | null>(null);
   const [originAddress, setOriginAddress] = useState("");
@@ -17,9 +20,17 @@ export default function App() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [weatherNote, setWeatherNote] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (status !== "loading") { setLoadingSeconds(0); return; }
+    const interval = setInterval(() => setLoadingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [status]);
+
   async function handleSearch(origin: LatLon, destination: LatLon, datetime: string, originAddr: string, destAddr: string, gpsOrigin: boolean) {
+    lastSearchRef.current = [origin, destination, datetime, originAddr, destAddr, gpsOrigin];
     setStatus("loading");
     setErrorMessage(null);
+    setIsTimeoutError(false);
     setRoutes([]);
     setSelectedTier(null);
     setSheetExpanded(false);
@@ -35,6 +46,8 @@ export default function App() {
       setWeatherNote(data.weatherNote ?? null);
       setStatus("success");
     } catch (err) {
+      const isTimeout = err instanceof Error && err.name === "TimeoutError";
+      setIsTimeoutError(isTimeout);
       setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
       setStatus("error");
     }
@@ -72,15 +85,30 @@ export default function App() {
           {status === "loading" && (
             <div style={styles.sheetCenter}>
               <div style={styles.spinner} />
-              <p style={styles.sheetHint}>Finding shaded routes…</p>
+              <div>
+                <p style={styles.sheetHint}>Finding shaded routes…</p>
+                {loadingSeconds >= 8 && (
+                  <p style={styles.sheetSubHint}>Scoring shade from buildings and trees along your route…</p>
+                )}
+              </div>
             </div>
           )}
 
           {/* Error */}
           {status === "error" && errorMessage && (
             <div style={styles.errorBox}>
-              <strong>Error</strong>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+                {isTimeoutError ? "Still working on it…" : "Something went wrong"}
+              </p>
               <p style={{ marginTop: 4, fontSize: 13 }}>{errorMessage}</p>
+              {lastSearchRef.current && (
+                <button
+                  style={styles.retryButton}
+                  onClick={() => handleSearch(...lastSearchRef.current!)}
+                >
+                  Try again
+                </button>
+              )}
             </div>
           )}
 
@@ -174,6 +202,13 @@ const styles: Record<string, CSSProperties> = {
   sheetHint: {
     fontSize: 14,
     color: "#666",
+    margin: 0,
+  },
+  sheetSubHint: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 4,
+    marginBottom: 0,
   },
   spinner: {
     width: 18,
@@ -186,12 +221,23 @@ const styles: Record<string, CSSProperties> = {
   },
   errorBox: {
     margin: "8px 16px 24px",
-    backgroundColor: "#ffebee",
+    backgroundColor: "#fff8e1",
     borderRadius: 10,
     padding: "12px 14px",
-    color: "#c62828",
+    color: "#5d4037",
     fontSize: 14,
-    border: "1px solid #ffcdd2",
+    border: "1px solid #ffe082",
+  },
+  retryButton: {
+    marginTop: 10,
+    padding: "7px 18px",
+    borderRadius: 20,
+    border: "none",
+    backgroundColor: "#2E7D32",
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
   },
   weatherBanner: {
     margin: "4px 16px 0",

@@ -117,39 +117,47 @@ class ShadeController(
         val shortestDistance = directCandidates.minOf { it.distanceMeters }.toDouble()
         val maxAllowedDistance = shortestDistance * 1.50
 
-        // Fetch all waypoint routes in parallel
-        val waypoints = perpendicularWaypoints(request.origin, request.destination, shortestDistance)
-        val waypointFutures = waypoints.map { wp ->
-            CompletableFuture.supplyAsync({
-                googleRoutesClient.fetchWalkingRouteViaWaypoint(request.origin, wp, request.destination)
-                    .also { r -> log.info("Waypoint $wp → ${if (r == null) "null" else "${r.distanceMeters}m, ${r.polyline.size} pts"}") }
-            }, executor)
-        }
-        val waypointCandidates = waypointFutures.mapNotNull { it.get() }
-
+        // Resolve weather now (already in-flight alongside direct route fetch, so near-instant)
         val weatherCondition = weatherFuture.get()
         val weatherNote = weatherNoteFor(weatherCondition)
+
+        // Circuit breaker: if rain/overcast, all routes are equally shaded — skip waypoint fetches
+        val waypointCandidates = if (weatherCondition != WeatherCondition.CLEAR) {
+            log.info("Weather override active — skipping waypoint route fetches")
+            emptyList()
+        } else {
+            val waypointFutures = perpendicularWaypoints(request.origin, request.destination, shortestDistance).map { wp ->
+                CompletableFuture.supplyAsync({
+                    googleRoutesClient.fetchWalkingRouteViaWaypoint(request.origin, wp, request.destination)
+                        .also { r -> log.info("Waypoint $wp → ${if (r == null) "null" else "${r.distanceMeters}m, ${r.polyline.size} pts"}") }
+                }, executor)
+            }
+            waypointFutures.mapNotNull { it.get() }
+        }
 
         log.info("directCandidates=${directCandidates.size} waypointCandidates=${waypointCandidates.size}")
 
         val candidates = (directCandidates + waypointCandidates).distinctBy { routeKey(it) }
         log.info("candidates after dedup=${candidates.size} maxAllowed=${maxAllowedDistance}m")
 
-        // Score all candidates in parallel
+        // Circuit breaker: if weather overrides shade (rain/overcast), skip building+tree scoring entirely
         val overrideShade = weatherCondition != WeatherCondition.CLEAR
-        val scoreFutures = candidates
-            .filter { it.distanceMeters <= maxAllowedDistance }
-            .map { candidate ->
+        val filtered = candidates.filter { it.distanceMeters <= maxAllowedDistance }
+        val scored: List<Triple<com.walkingoffsunshine.routes.CandidateRoute, Double, Double>> = if (overrideShade) {
+            log.info("Weather override active — skipping shadow scoring")
+            filtered.map { Triple(it, 1.0, it.distanceMeters.toDouble()) }
+        } else {
+            val scoreFutures = filtered.map { candidate ->
                 CompletableFuture.supplyAsync({
                     val segments = shadowScorer.scorePolyline(candidate.polyline, dt)
                     val totalDist = segments.sumOf { it.distanceMeters }
-                    val shade = if (overrideShade) 1.0
-                        else if (totalDist == 0.0) 0.0
+                    val shade = if (totalDist == 0.0) 0.0
                         else segments.sumOf { it.shadeScore * it.distanceMeters } / totalDist
                     Triple(candidate, shade, totalDist)
                 }, executor)
             }
-        val scored = scoreFutures.map { it.get() }
+            scoreFutures.map { it.get() }
+        }
 
         // Always return exactly 2 routes: shadiest and shortest.
         val shadiest = scored.maxByOrNull { (_, shade, _) -> shade }

@@ -9,7 +9,7 @@ export async function fetchShadeRoutes(
 ): Promise<RoutesResponse> {
   const base = import.meta.env.VITE_API_BASE_URL ?? "";
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 60000);
   let response: Response;
   try {
     response = await fetch(`${base}/api/routes`, {
@@ -20,7 +20,9 @@ export async function fetchShadeRoutes(
     });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Request timed out. Check your connection and try again.");
+      const e = new Error("Calculating shaded routes took longer than expected. Please try again.");
+      e.name = "TimeoutError";
+      throw e;
     }
     throw err;
   } finally {
