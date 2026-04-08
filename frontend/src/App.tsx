@@ -175,7 +175,8 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 20,
-    padding: "12px 12px 0",
+    // env() gives extra top padding for the notch; falls back to 12px on non-notch devices
+    padding: "calc(env(safe-area-inset-top, 0px) + 12px) 12px 0",
   },
   sheet: {
     position: "absolute",
@@ -206,7 +207,8 @@ const styles: Record<string, CSSProperties> = {
   },
   sheetScroll: {
     overflowY: "auto",
-    padding: "0 16px 32px",
+    // extra bottom padding for home indicator on notchless iPhones
+    padding: "0 16px calc(env(safe-area-inset-bottom, 0px) + 32px)",
     flex: 1,
   },
   sheetCenter: {

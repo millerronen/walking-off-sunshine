@@ -96,15 +96,14 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     });
   }, []);
 
-  // Set up origin autocomplete when the field becomes visible
+  // Set up origin autocomplete once on mount (input is always in the DOM now)
   useEffect(() => {
-    if (!showOrigin) return;
     window.__googleMapsReadyPromise.then(() => {
       if (!originInputRef.current) return;
       const originAC = new google.maps.places.Autocomplete(originInputRef.current, { types: ["geocode"] });
       originAC.addListener("place_changed", () => setOriginPlace(originAC.getPlace()));
     });
-  }, [showOrigin]);
+  }, []);
 
   function extractLatLon(place: google.maps.places.PlaceResult | null, label: string): LatLon | string {
     const loc = place?.geometry?.location;
@@ -170,24 +169,29 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         <span style={styles.title}>HolechBaTzel</span>
       </div>
 
-      {/* Origin (optional, hidden by default) */}
-      {showOrigin && (
-        <div style={styles.originRow}>
-          <input
-            ref={originInputRef}
-            type="text"
-            placeholder="Starting point"
-            style={styles.originInput}
-            autoFocus
-            onChange={() => {
-              if (!originInputRef.current?.value.trim()) setOriginPlace(null);
-            }}
-          />
-          <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
-            Use my location
-          </button>
-        </div>
-      )}
+      {/* Origin (optional, hidden by default) — always rendered so transition is smooth */}
+      <div style={{
+        ...styles.originRow,
+        maxHeight: showOrigin ? 56 : 0,
+        opacity: showOrigin ? 1 : 0,
+        overflow: "hidden",
+        padding: showOrigin ? styles.originRow.padding : "0 12px",
+        transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease",
+        marginBottom: showOrigin ? undefined : -10,
+      }}>
+        <input
+          ref={originInputRef}
+          type="text"
+          placeholder="Starting point"
+          style={styles.originInput}
+          onChange={() => {
+            if (!originInputRef.current?.value.trim()) setOriginPlace(null);
+          }}
+        />
+        <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
+          Use my location
+        </button>
+      </div>
 
       {/* Destination */}
       <div style={styles.destRow}>
@@ -215,8 +219,13 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       </div>
 
       {/* Origin hint */}
-      {!showOrigin && (
-        <div style={styles.originHint}>
+      <div style={{
+        ...styles.originHint,
+        maxHeight: showOrigin ? 0 : 24,
+        opacity: showOrigin ? 0 : 1,
+        overflow: "hidden",
+        transition: "max-height 0.2s ease, opacity 0.15s ease",
+      }}>
           <span style={{ ...styles.gpsDot, backgroundColor: gpsDotColor }} />
           <span style={styles.originHintText}>
             {gpsState === "acquiring" ? "Locating you…" : gpsState === "ready" ? "From your location" : "Location unavailable"}
@@ -225,7 +234,6 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
             change
           </button>
         </div>
-      )}
 
       {/* Time picker */}
       <div style={styles.timeRow}>
