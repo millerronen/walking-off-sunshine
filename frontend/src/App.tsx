@@ -164,6 +164,8 @@ const styles: Record<string, CSSProperties> = {
     height: "100%",
     overflow: "hidden",
     backgroundColor: "#f5f5f5",
+    // Belt-and-suspenders: prevent any child from expanding beyond screen width
+    maxWidth: "100vw",
   },
   mapLayer: {
     position: "absolute",
@@ -175,8 +177,12 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 20,
-    // env() gives extra top padding for the notch; falls back to 12px on non-notch devices
-    padding: "calc(env(safe-area-inset-top, 0px) + 12px) 12px 0",
+    // Split into separate properties so horizontal padding is never affected
+    // by env() parsing — safe-area-inset-top only applies to paddingTop
+    paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
+    paddingLeft: 12,
+    paddingRight: 12,
+    paddingBottom: 0,
   },
   sheet: {
     position: "absolute",

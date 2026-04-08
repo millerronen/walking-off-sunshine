@@ -298,6 +298,9 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 10,
+    // Prevent any child from overflowing the card bounds
+    overflow: "hidden",
+    minWidth: 0,
   },
   header: {
     display: "flex",
@@ -382,6 +385,7 @@ const styles: Record<string, CSSProperties> = {
   },
   originInput: {
     flex: 1,
+    minWidth: 0,
     border: "none",
     background: "transparent",
     fontSize: 14,
