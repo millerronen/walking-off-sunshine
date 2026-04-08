@@ -25,3 +25,9 @@ shadow:
 spring:
   jackson:
     default-property-inclusion: non_null
+
+logging:
+  level:
+    # ClosedChannelException on SSL handshake drop is normal in Cloud Run — suppress it
+    io.netty.handler.ssl: OFF
+    reactor.netty.http.client: WARN
