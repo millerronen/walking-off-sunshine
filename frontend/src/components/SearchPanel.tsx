@@ -212,7 +212,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       {/* Header */}
       <div style={styles.header}>
         <span style={styles.sun}>☀️</span>
-        <span style={styles.title}>Walking Off Sunshine</span>
+        <span style={styles.title}>HolechBaTzel</span>
       </div>
 
       {/* Origin (optional, hidden by default) — always rendered so transition is smooth */}
