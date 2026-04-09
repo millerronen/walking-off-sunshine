@@ -8,15 +8,19 @@ interface Props {
   gpsOrigin?: LatLon | null;
   pickingDest?: boolean;
   onMapPick?: (latLon: LatLon, label: string) => void;
+  pickingOrigin?: boolean;
+  onMapPickOrigin?: (latLon: LatLon, label: string) => void;
 }
 
-export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPick }: Props) {
+export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPick, pickingOrigin, onMapPickOrigin }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const polylinesRef = useRef<Map<TierPercent, google.maps.Polyline>>(new Map());
   const gpsMarkerRef = useRef<google.maps.Marker | null>(null);
   const pickMarkerRef = useRef<google.maps.Marker | null>(null);
   const pickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const originPickMarkerRef = useRef<google.maps.Marker | null>(null);
+  const originPickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const [mapsReady, setMapsReady] = useState(false);
 
   // Wait for Maps API to be available
@@ -136,6 +140,53 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
     }
   }, [gpsOrigin, routes.length]);
 
+  // Pick-on-map mode for origin
+  useEffect(() => {
+    if (!mapRef.current || !mapsReady) return;
+
+    if (!pickingOrigin) {
+      if (originPickListenerRef.current) { google.maps.event.removeListener(originPickListenerRef.current); originPickListenerRef.current = null; }
+      originPickMarkerRef.current?.setMap(null);
+      originPickMarkerRef.current = null;
+      if (!pickingDest) mapRef.current.getDiv().style.cursor = "";
+      return;
+    }
+
+    mapRef.current.getDiv().style.cursor = "crosshair";
+
+    const geocoder = new google.maps.Geocoder();
+    const placePin = (latLng: google.maps.LatLng) => {
+      if (!mapRef.current) return;
+      if (!originPickMarkerRef.current) {
+        originPickMarkerRef.current = new google.maps.Marker({
+          map: mapRef.current,
+          draggable: true,
+          animation: google.maps.Animation.DROP,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#1565C0", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 },
+        });
+        originPickMarkerRef.current.addListener("dragend", () => {
+          const pos = originPickMarkerRef.current!.getPosition()!;
+          placePin(pos);
+        });
+      }
+      originPickMarkerRef.current.setPosition(latLng);
+      geocoder.geocode({ location: latLng }).then((res) => {
+        const label = res.results?.[0]?.formatted_address ?? `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`;
+        onMapPickOrigin?.({ lat: latLng.lat(), lon: latLng.lng() }, label);
+      }).catch(() => {
+        onMapPickOrigin?.({ lat: latLng.lat(), lon: latLng.lng() }, `${latLng.lat().toFixed(5)}, ${latLng.lng().toFixed(5)}`);
+      });
+    };
+
+    originPickListenerRef.current = mapRef.current.addListener("click", (e: google.maps.MapMouseEvent) => {
+      if (e.latLng) placePin(e.latLng);
+    });
+
+    return () => {
+      if (originPickListenerRef.current) { google.maps.event.removeListener(originPickListenerRef.current); originPickListenerRef.current = null; }
+    };
+  }, [pickingOrigin, mapsReady]);
+
   // Pick-on-map mode: click to drop / drag a destination pin
   useEffect(() => {
     if (!mapRef.current || !mapsReady) return;
@@ -208,6 +259,11 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
       {pickingDest && (
         <div style={styles.pickHint}>
           Tap the map to set your destination
+        </div>
+      )}
+      {pickingOrigin && (
+        <div style={styles.pickHint}>
+          Tap the map to set your starting point
         </div>
       )}
       <div ref={containerRef} style={styles.map} />

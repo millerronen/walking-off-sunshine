@@ -21,6 +21,9 @@ interface Props {
   pickedDest: { latLon: LatLon; label: string } | null;
   onPickDestOnMap: () => void;
   onClearPickedDest: () => void;
+  pickedOrigin: { latLon: LatLon; label: string } | null;
+  onPickOriginOnMap: () => void;
+  onClearPickedOrigin: () => void;
 }
 
 declare global {
@@ -39,7 +42,9 @@ function toLocalDatetimeValue(date: Date): string {
   );
 }
 
-export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest }: Props) {
+const MAX_WALKING_METRES = 20_000;
+
+export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest, pickedOrigin, onPickOriginOnMap, onClearPickedOrigin }: Props) {
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +95,17 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     }
   }, [pickedDest]);
 
+  // Sync map-picked origin into the input field
+  useEffect(() => {
+    if (!originInputRef.current) return;
+    if (pickedOrigin) {
+      originInputRef.current.value = pickedOrigin.label;
+      setOriginHasText(true);
+      setOriginPlace(null);
+      setShowOrigin(true);
+    }
+  }, [pickedOrigin]);
+
   // Set up dest autocomplete once on mount
   useEffect(() => {
     window.__googleMapsReadyPromise.then(() => {
@@ -108,12 +124,20 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     });
   }, []);
 
-  function isTooClose(a: LatLon, b: LatLon): boolean {
+  function haversineMetres(a: LatLon, b: LatLon): number {
     const R = 6371000;
     const dLat = (b.lat - a.lat) * Math.PI / 180;
     const dLon = (b.lon - a.lon) * Math.PI / 180;
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(h)) < 50; // within 50 metres
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  function isTooClose(a: LatLon, b: LatLon): boolean {
+    return haversineMetres(a, b) < 50;
+  }
+
+  function isTooFar(a: LatLon, b: LatLon): boolean {
+    return haversineMetres(a, b) > MAX_WALKING_METRES;
   }
 
   // Types that are too broad to be a meaningful walking start/end point
@@ -150,6 +174,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   }
 
   function clearOrigin() {
+    onClearPickedOrigin();
     setOriginPlace(null);
     setOriginHasText(false);
     if (originInputRef.current) { originInputRef.current.value = ""; originInputRef.current.focus(); }
@@ -189,13 +214,23 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         setError("Your starting point and destination are the same. Please choose a different destination.");
         return;
       }
+      if (isTooFar(origin, destination)) {
+        setError("Route is over 20 km — please choose a closer destination for a walking route.");
+        return;
+      }
       const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
       onSearch(origin, destination, dt, "", destAddress, true);
     } else {
-      const origin = extractLatLon(originPlace, "origin");
+      const origin = pickedOrigin
+        ? pickedOrigin.latLon
+        : extractLatLon(originPlace, "origin");
       if (typeof origin === "string") { setError(origin); return; }
       if (isTooClose(origin, destination)) {
         setError("Your starting point and destination are the same. Please choose a different destination.");
+        return;
+      }
+      if (isTooFar(origin, destination)) {
+        setError("Route is over 20 km — please choose a closer destination for a walking route.");
         return;
       }
       const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
@@ -239,9 +274,12 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         {originHasText ? (
           <button type="button" style={styles.clearBtn} onClick={clearOrigin}>✕</button>
         ) : (
-          <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
-            Use my location
-          </button>
+          <>
+            <button type="button" style={styles.mapPickBtn} onClick={onPickOriginOnMap}>📍</button>
+            <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
+              Use my location
+            </button>
+          </>
         )}
       </div>
 

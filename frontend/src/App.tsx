@@ -21,6 +21,8 @@ export default function App() {
   const [weatherNote, setWeatherNote] = useState<string | null>(null);
   const [pickingDest, setPickingDest] = useState(false);
   const [pickedDest, setPickedDest] = useState<{ latLon: LatLon; label: string } | null>(null);
+  const [pickingOrigin, setPickingOrigin] = useState(false);
+  const [pickedOrigin, setPickedOrigin] = useState<{ latLon: LatLon; label: string } | null>(null);
 
   useEffect(() => {
     if (status !== "loading") { setLoadingSeconds(0); return; }
@@ -32,6 +34,8 @@ export default function App() {
     lastSearchRef.current = [origin, destination, datetime, originAddr, destAddr, gpsOrigin];
     setPickingDest(false);
     setPickedDest(null);
+    setPickingOrigin(false);
+    setPickedOrigin(null);
     setStatus("loading");
     setErrorMessage(null);
     setIsTimeoutError(false);
@@ -76,6 +80,8 @@ export default function App() {
           gpsOrigin={gpsOriginLatLon}
           pickingDest={pickingDest}
           onMapPick={(latLon, label) => { setPickedDest({ latLon, label }); setPickingDest(false); }}
+          pickingOrigin={pickingOrigin}
+          onMapPickOrigin={(latLon, label) => { setPickedOrigin({ latLon, label }); setPickingOrigin(false); }}
         />
       </div>
 
@@ -85,8 +91,11 @@ export default function App() {
           onSearch={handleSearch}
           isLoading={status === "loading"}
           pickedDest={pickedDest}
-          onPickDestOnMap={() => setPickingDest(true)}
+          onPickDestOnMap={() => { setPickingDest(true); setPickingOrigin(false); }}
           onClearPickedDest={() => setPickedDest(null)}
+          pickedOrigin={pickedOrigin}
+          onPickOriginOnMap={() => { setPickingOrigin(true); setPickingDest(false); }}
+          onClearPickedOrigin={() => setPickedOrigin(null)}
         />
       </div>
 
