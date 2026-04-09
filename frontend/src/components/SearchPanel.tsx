@@ -112,7 +112,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   useEffect(() => {
     window.__googleMapsReadyPromise.then(() => {
       if (!destInputRef.current) return;
-      const destAC = new google.maps.places.Autocomplete(destInputRef.current, { types: ["geocode"] });
+      const destAC = new google.maps.places.Autocomplete(destInputRef.current, { types: ["geocode", "establishment"] });
       destAC.addListener("place_changed", () => setDestPlace(destAC.getPlace()));
     });
   }, []);
@@ -121,7 +121,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   useEffect(() => {
     window.__googleMapsReadyPromise.then(() => {
       if (!originInputRef.current) return;
-      const originAC = new google.maps.places.Autocomplete(originInputRef.current, { types: ["geocode"] });
+      const originAC = new google.maps.places.Autocomplete(originInputRef.current, { types: ["geocode", "establishment"] });
       originAC.addListener("place_changed", () => setOriginPlace(originAC.getPlace()));
     });
   }, []);
