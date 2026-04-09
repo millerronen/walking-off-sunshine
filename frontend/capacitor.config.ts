@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.walkingoffsunshine.app',
-  appName: 'Umbra',
+  appName: 'HolechBaTzel',
   webDir: 'dist',
   plugins: {
     Keyboard: {
