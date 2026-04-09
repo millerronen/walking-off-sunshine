@@ -31,12 +31,16 @@ Mobile app (iOS + Android + web) that finds walking routes maximizing shade from
 ```bash
 # Frontend
 cd frontend && gcloud builds submit --config cloudbuild.yaml .
-gcloud run deploy frontend --image europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/frontend:latest --region europe-west1
+gcloud run deploy walking-off-sunshine-frontend --image europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/frontend:latest --region europe-west1 --set-env-vars BACKEND_URL=https://walking-off-sunshine-backend-6p2pjp4q7a-ew.a.run.app --allow-unauthenticated
 
 # Backend
 cd backend && gcloud builds submit --tag europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/backend:latest .
-gcloud run deploy backend --image europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/backend:latest --region europe-west1
+gcloud run deploy walking-off-sunshine-backend --image europe-west1-docker.pkg.dev/walking-off-sunshine/walking-off-sunshine/backend:latest --region europe-west1
 ```
+
+## Cloud Run Service URLs
+- Frontend: `https://walking-off-sunshine-frontend-133268494307.europe-west1.run.app`
+- Backend: `https://walking-off-sunshine-backend-6p2pjp4q7a-ew.a.run.app`
 
 ## Key Conventions
 - Perpendicular waypoint offset: `(directDistanceM * 0.3).coerceIn(30.0, 500.0)` — keeps short-route alternatives valid
