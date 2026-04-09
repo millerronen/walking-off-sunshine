@@ -96,6 +96,7 @@ export default function App() {
           pickedOrigin={pickedOrigin}
           onPickOriginOnMap={() => { setPickingOrigin(true); setPickingDest(false); }}
           onClearPickedOrigin={() => setPickedOrigin(null)}
+          onGpsAcquired={(latLon) => setGpsOriginLatLon(latLon)}
         />
       </div>
 

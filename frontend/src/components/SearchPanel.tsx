@@ -24,6 +24,7 @@ interface Props {
   pickedOrigin: { latLon: LatLon; label: string } | null;
   onPickOriginOnMap: () => void;
   onClearPickedOrigin: () => void;
+  onGpsAcquired?: (latLon: LatLon) => void;
 }
 
 declare global {
@@ -44,7 +45,7 @@ function toLocalDatetimeValue(date: Date): string {
 
 const MAX_WALKING_METRES = 20_000;
 
-export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest, pickedOrigin, onPickOriginOnMap, onClearPickedOrigin }: Props) {
+export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest, pickedOrigin, onPickOriginOnMap, onClearPickedOrigin, onGpsAcquired }: Props) {
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +77,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         const loc: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         prefetchedGps.current = loc;
         setGpsState("ready");
+        onGpsAcquired?.(loc);
         return loc;
       } catch {
         setGpsState("error");
