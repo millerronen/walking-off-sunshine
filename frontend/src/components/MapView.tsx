@@ -138,7 +138,7 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
       mapRef.current.panTo(pos);
       mapRef.current.setZoom(16);
     }
-  }, [gpsOrigin, routes.length]);
+  }, [gpsOrigin, routes.length, mapsReady]);
 
   // Pick-on-map mode for origin
   useEffect(() => {
