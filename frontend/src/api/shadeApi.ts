@@ -1,4 +1,7 @@
+import { Capacitor } from "@capacitor/core";
 import type { RoutesRequest, RoutesResponse } from "../types";
+
+const NATIVE_BACKEND = "https://walking-off-sunshine-backend-133268494307.europe-west1.run.app";
 
 /**
  * POST /api/routes
@@ -7,7 +10,9 @@ import type { RoutesRequest, RoutesResponse } from "../types";
 export async function fetchShadeRoutes(
   request: RoutesRequest
 ): Promise<RoutesResponse> {
-  const base = import.meta.env.VITE_API_BASE_URL ?? "";
+  const base = Capacitor.isNativePlatform()
+    ? NATIVE_BACKEND
+    : (import.meta.env.VITE_API_BASE_URL ?? "");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000);
   let response: Response;
