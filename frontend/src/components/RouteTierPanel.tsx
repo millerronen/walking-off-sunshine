@@ -29,14 +29,8 @@ function shadePercent(score: number): string {
 
 function buildNavigateUrl(originAddress: string, destAddress: string, usingGpsOrigin: boolean): string {
   const destination = encodeURIComponent(destAddress);
-  if (typeof window !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    if (usingGpsOrigin) {
-      // No saddr → Google Maps uses current GPS → shows "Start" navigation button
-      return `comgooglemaps://?daddr=${destination}&directionsmode=walking`;
-    }
-    // saddr specified → route planning mode → shows Preview (user taps Start manually)
-    return `comgooglemaps://?saddr=${encodeURIComponent(originAddress)}&daddr=${destination}&directionsmode=walking`;
-  }
+  // Use Google Maps web URL on all platforms — on iOS this is a Universal Link that opens
+  // the Google Maps app if installed, or falls back to Safari if not.
   if (usingGpsOrigin) {
     return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=walking`;
   }
