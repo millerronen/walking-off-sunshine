@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { LatLon, ShadeRoute, TierPercent } from "../types";
 import { TIER_COLORS } from "../types";
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPick, pickingOrigin, onMapPickOrigin }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const polylinesRef = useRef<Map<TierPercent, google.maps.Polyline>>(new Map());
@@ -118,7 +120,7 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
       gpsMarkerRef.current = new google.maps.Marker({
         position: pos,
         map: mapRef.current,
-        title: "Your location",
+        title: t("fromYourLocation"),
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
           scale: 9,
@@ -253,17 +255,17 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
     <div style={styles.wrapper}>
       {!mapsReady && (
         <div style={styles.loadingOverlay}>
-          <p style={styles.loadingText}>Loading map…</p>
+          <p style={styles.loadingText}>{t("loadingMap")}</p>
         </div>
       )}
       {pickingDest && (
         <div style={styles.pickHint}>
-          Tap the map to set your destination
+          {t("tapMapDest")}
         </div>
       )}
       {pickingOrigin && (
         <div style={styles.pickHint}>
-          Tap the map to set your starting point
+          {t("tapMapOrigin")}
         </div>
       )}
       <div ref={containerRef} style={styles.map} />

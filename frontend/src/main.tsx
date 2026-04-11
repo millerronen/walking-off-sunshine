@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import "./i18n";
 
 // Global CSS for the spinner animation (can't be done with inline styles alone)
 const styleEl = document.createElement("style");

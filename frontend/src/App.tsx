@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { fetchShadeRoutes } from "./api/shadeApi";
 import { SearchPanel } from "./components/SearchPanel";
 import { MapView } from "./components/MapView";
@@ -6,6 +7,13 @@ import { RouteTierPanel } from "./components/RouteTierPanel";
 import type { AppStatus, LatLon, ShadeRoute, TierPercent } from "./types";
 
 export default function App() {
+  const { t, i18n } = useTranslation();
+
+  // Set RTL direction based on language
+  useEffect(() => {
+    document.documentElement.dir = i18n.language.startsWith("he") ? "rtl" : "ltr";
+  }, [i18n.language]);
+
   const [status, setStatus] = useState<AppStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isTimeoutError, setIsTimeoutError] = useState(false);
@@ -51,7 +59,7 @@ export default function App() {
     try {
       const data = await fetchShadeRoutes({ origin, destination, datetime });
       if (data.routes.length === 0) {
-        setErrorMessage("No walking route found between these locations. Please check the addresses and try again.");
+        setErrorMessage(t("errorNoRoute"));
         setIsTimeoutError(false);
         setStatus("error");
         return;
@@ -62,7 +70,7 @@ export default function App() {
     } catch (err) {
       const isTimeout = err instanceof Error && err.name === "TimeoutError";
       setIsTimeoutError(isTimeout);
-      setErrorMessage(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setErrorMessage(err instanceof Error ? err.message : t("errorUnexpected"));
       setStatus("error");
     }
   }
@@ -118,9 +126,9 @@ export default function App() {
             <div style={styles.sheetCenter}>
               <div style={styles.spinner} />
               <div>
-                <p style={styles.sheetHint}>Finding shaded routes…</p>
+                <p style={styles.sheetHint}>{t("findingRoutes")}</p>
                 {loadingSeconds >= 8 && (
-                  <p style={styles.sheetSubHint}>Scoring shade from buildings and trees along your route…</p>
+                  <p style={styles.sheetSubHint}>{t("scoringShade")}</p>
                 )}
               </div>
             </div>
@@ -130,7 +138,7 @@ export default function App() {
           {status === "error" && errorMessage && (
             <div style={styles.errorBox}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
-                {isTimeoutError ? "Still working on it…" : "Something went wrong"}
+                {isTimeoutError ? t("stillWorking") : t("somethingWentWrong")}
               </p>
               <p style={{ marginTop: 4, fontSize: 13 }}>{errorMessage}</p>
               {lastSearchRef.current && (
@@ -138,7 +146,7 @@ export default function App() {
                   style={styles.retryButton}
                   onClick={() => handleSearch(...lastSearchRef.current!)}
                 >
-                  Try again
+                  {t("tryAgain")}
                 </button>
               )}
             </div>

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import type { ShadeRoute, TierPercent } from "../types";
-import { TIER_COLORS, TIER_LABELS } from "../types";
+import { TIER_COLORS } from "../types";
 
 interface Props {
   routes: ShadeRoute[];
@@ -38,6 +39,13 @@ function buildNavigateUrl(originAddress: string, destAddress: string, usingGpsOr
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
 
+const TIER_LABEL_KEYS: Record<TierPercent, string> = {
+  25: "tierShortest",
+  50: "tierFair",
+  75: "tierGood",
+  100: "tierMostShaded",
+};
+
 export function RouteTierPanel({
   routes,
   selectedTier,
@@ -46,13 +54,14 @@ export function RouteTierPanel({
   destAddress,
   usingGpsOrigin,
 }: Props) {
+  const { t } = useTranslation();
   if (routes.length === 0) return null;
 
   const shadiest = routes.find((r) => r.tierPercent === 100) ?? null;
 
   return (
     <div style={styles.panel}>
-      <h2 style={styles.heading}>Route Options</h2>
+      <h2 style={styles.heading}>{t("routeOptions")}</h2>
       <div style={styles.list}>
         {routes.map((route, idx) => {
           const color = TIER_COLORS[route.tierPercent];
@@ -64,8 +73,8 @@ export function RouteTierPanel({
             const minSaved = Math.round((shadiest.durationSeconds - route.durationSeconds) / 60);
             const shadeLost = Math.round((shadiest.shadeScore - route.shadeScore) * 100);
             const parts: string[] = [];
-            if (minSaved > 0) parts.push(`saves ${minSaved} min`);
-            if (shadeLost > 0) parts.push(`${shadeLost}% less shade`);
+            if (minSaved > 0) parts.push(t("savesMins", { count: minSaved }));
+            if (shadeLost > 0) parts.push(t("lessShade", { percent: shadeLost }));
             if (parts.length > 0) deltaLine = parts.join(" · ");
           }
 
@@ -89,9 +98,9 @@ export function RouteTierPanel({
 
               {/* Route info */}
               <div style={styles.info}>
-                <p style={styles.tierLabel}>{TIER_LABELS[route.tierPercent]}</p>
+                <p style={styles.tierLabel}>{t(TIER_LABEL_KEYS[route.tierPercent])}</p>
                 <div style={styles.stats}>
-                  <span style={styles.stat}>🌿 {shadePercent(route.shadeScore)} shade</span>
+                  <span style={styles.stat}>🌿 {shadePercent(route.shadeScore)} {t("shade")}</span>
                   <span style={styles.stat}>📍 {formatDistance(route.distanceMeters)}</span>
                   <span style={styles.stat}>🕒 {formatDuration(route.durationSeconds)}</span>
                 </div>

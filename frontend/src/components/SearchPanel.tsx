@@ -5,6 +5,7 @@ import {
   type CSSProperties,
   type FormEvent,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { Geolocation } from "@capacitor/geolocation";
 import type { LatLon } from "../types";
 
@@ -46,6 +47,7 @@ function toLocalDatetimeValue(date: Date): string {
 const MAX_WALKING_METRES = 20_000;
 
 export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest, pickedOrigin, onPickOriginOnMap, onClearPickedOrigin, onGpsAcquired }: Props) {
+  const { t } = useTranslation();
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
 
@@ -148,14 +150,14 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     "administrative_area_level_3", "colloquial_area",
   ]);
 
-  function extractLatLon(place: google.maps.places.PlaceResult | null, label: string): LatLon | string {
+  function extractLatLon(place: google.maps.places.PlaceResult | null, field: "dest" | "origin"): LatLon | string {
     const loc = place?.geometry?.location;
-    if (!loc) return `Please select a ${label} from the dropdown suggestions.`;
+    if (!loc) return field === "dest" ? t("errorSelectDest") : t("errorSelectOrigin");
 
     // Reject if the only types are country / state / region level — too vague for routing
     const types = place.types ?? [];
-    if (types.length > 0 && types.every(t => TOO_BROAD_TYPES.has(t))) {
-      return `That ${label} is too broad (e.g. a country or region). Please enter a specific street or place.`;
+    if (types.length > 0 && types.every(type => TOO_BROAD_TYPES.has(type))) {
+      return field === "dest" ? t("errorTooBroadDest") : t("errorTooBroadOrigin");
     }
 
     return { lat: loc.lat(), lon: loc.lng() };
@@ -188,7 +190,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
 
     const destination: LatLon | string = pickedDest
       ? pickedDest.latLon
-      : extractLatLon(destPlace, "destination");
+      : extractLatLon(destPlace, "dest");
     if (typeof destination === "string") { setError(destination); return; }
 
     const destAddress = pickedDest?.label ?? destPlace?.formatted_address ?? destInputRef.current?.value ?? "";
@@ -198,7 +200,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       let origin = prefetchedGps.current;
       if (!origin) {
         if (gpsState === "denied") {
-          setError("Location access denied. Go to Settings → Umbra → Location and allow access, or enter a starting point.");
+          setError(t("errorLocationDenied"));
           return;
         }
         setLocating(true);
@@ -209,15 +211,15 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         }
       }
       if (!origin) {
-        setError("Could not get your location. Enter a starting point or check Settings → Privacy → Location Services.");
+        setError(t("errorLocationFailed"));
         return;
       }
       if (isTooClose(origin, destination)) {
-        setError("Your starting point and destination are the same. Please choose a different destination.");
+        setError(t("errorSameLocation"));
         return;
       }
       if (isTooFar(origin, destination)) {
-        setError("Route is over 20 km — please choose a closer destination for a walking route.");
+        setError(t("errorTooFar"));
         return;
       }
       const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
@@ -228,11 +230,11 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         : extractLatLon(originPlace, "origin");
       if (typeof origin === "string") { setError(origin); return; }
       if (isTooClose(origin, destination)) {
-        setError("Your starting point and destination are the same. Please choose a different destination.");
+        setError(t("errorSameLocation"));
         return;
       }
       if (isTooFar(origin, destination)) {
-        setError("Route is over 20 km — please choose a closer destination for a walking route.");
+        setError(t("errorTooFar"));
         return;
       }
       const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
@@ -249,7 +251,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       {/* Header */}
       <div style={styles.header}>
         <span style={styles.sun}>☀️</span>
-        <span style={styles.title}>HolechBaTzel</span>
+        <span style={styles.title}>{t("appTitle")}</span>
       </div>
 
       {/* Origin (optional, hidden by default) — always rendered so transition is smooth */}
@@ -265,7 +267,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         <input
           ref={originInputRef}
           type="text"
-          placeholder="Starting point"
+          placeholder={t("startingPoint")}
           style={styles.originInput}
           onChange={() => {
             const v = originInputRef.current?.value ?? "";
@@ -279,7 +281,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
           <>
             <button type="button" style={styles.mapPickBtn} onClick={onPickOriginOnMap}>📍</button>
             <button type="button" style={styles.gpsPill} onClick={handleUseGps}>
-              Use my location
+              {t("useMyLocation")}
             </button>
           </>
         )}
@@ -290,7 +292,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         <input
           ref={destInputRef}
           type="text"
-          placeholder="Where to?"
+          placeholder={t("whereTo")}
           style={styles.destInput}
           onChange={() => {
             const v = destInputRef.current?.value ?? "";
@@ -316,10 +318,10 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       }}>
           <span style={{ ...styles.gpsDot, backgroundColor: gpsDotColor }} />
           <span style={styles.originHintText}>
-            {gpsState === "acquiring" ? "Locating you…" : gpsState === "ready" ? "From your location" : "Location unavailable"}
+            {gpsState === "acquiring" ? t("locatingYou") : gpsState === "ready" ? t("fromYourLocation") : t("locationUnavailable")}
           </span>
           <button type="button" style={styles.changeBtn} onClick={() => setShowOrigin(true)}>
-            change
+            {t("change")}
           </button>
         </div>
 
@@ -330,14 +332,14 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
           style={{ ...styles.timeChip, ...(useNow ? styles.timeChipActive : {}) }}
           onClick={() => setUseNow(true)}
         >
-          Now
+          {t("now")}
         </button>
         <button
           type="button"
           style={{ ...styles.timeChip, ...(!useNow ? styles.timeChipActive : {}) }}
           onClick={() => setUseNow(false)}
         >
-          Choose time
+          {t("chooseTime")}
         </button>
         {!useNow && (
           <input
@@ -352,7 +354,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       {error && <p style={styles.error}>{error}</p>}
 
       <button type="submit" style={styles.button} disabled={busy}>
-        {locating ? "Getting location…" : isLoading ? "Calculating routes…" : "Find Shaded Routes"}
+        {locating ? t("gettingLocation") : isLoading ? t("calculatingRoutes") : t("findShadedRoutes")}
       </button>
     </form>
   );
