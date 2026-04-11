@@ -14,6 +14,11 @@ i18n
     },
     fallbackLng: 'en',
     interpolation: { escapeValue: false },
+    detection: {
+      // Use device/browser language first, don't cache it
+      order: ['navigator', 'htmlTag'],
+      caches: [],
+    },
   });
 
 export default i18n;
