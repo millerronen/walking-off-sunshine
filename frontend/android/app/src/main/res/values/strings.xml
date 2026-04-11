@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">הולך בצל</string>
-    <string name="title_activity_main">הולך בצל</string>
+    <string name="app_name">Walking Off Sunshine</string>
+    <string name="title_activity_main">Walking Off Sunshine</string>
     <string name="package_name">com.walkingoffsunshine.app</string>
     <string name="custom_url_scheme">com.walkingoffsunshine.app</string>
 </resources>
