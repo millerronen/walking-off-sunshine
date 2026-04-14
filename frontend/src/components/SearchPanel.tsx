@@ -369,8 +369,8 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    // Prevent any child from overflowing the card bounds
-    overflow: "hidden",
+    // Allow autocomplete dropdown to overflow (fixes Huawei Android issue)
+    overflow: "visible",
     minWidth: 0,
   },
   header: {
