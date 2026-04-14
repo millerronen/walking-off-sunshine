@@ -11,7 +11,8 @@ npm install
 # Build web assets (required by cap sync) using a placeholder API key
 VITE_GOOGLE_MAPS_API_KEY=placeholder npm run build
 
-# Remove Package.resolved to avoid local SPM references that don't work in CI
-rm -f "$CI_PRIMARY_REPOSITORY_PATH/frontend/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-
 npx cap sync ios
+
+# cap sync overwrites Package.resolved with local node_modules references that
+# don't exist in CI — restore it to the committed version (remote sources only)
+git -C "$CI_PRIMARY_REPOSITORY_PATH" checkout -- frontend/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
