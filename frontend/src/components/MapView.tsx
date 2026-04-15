@@ -33,6 +33,26 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
       .catch(() => setMapsError(true));
   }, []);
 
+  // When network comes back (or app foregrounds), force Maps to re-fetch grey tiles
+  // by nudging the zoom level — the only reliable way to invalidate the tile cache.
+  useEffect(() => {
+    const refreshTiles = () => {
+      const map = mapRef.current;
+      if (!map) return;
+      const zoom = map.getZoom();
+      if (zoom === undefined) return;
+      map.setZoom(zoom + 1);
+      setTimeout(() => map.setZoom(zoom), 50);
+    };
+    const handleVisibility = () => { if (!document.hidden) refreshTiles(); };
+    window.addEventListener("online", refreshTiles);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("online", refreshTiles);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   // Stop any GPU work while the app is in the background (Page Visibility API).
   // Disabling gestures when hidden prevents the map from processing touch events
   // that can wake the GPU on Capacitor's WKWebView.
