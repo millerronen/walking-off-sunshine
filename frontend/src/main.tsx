@@ -10,6 +10,11 @@ styleEl.textContent = `
     to { transform: rotate(360deg); }
   }
 
+  @keyframes gpsPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+  }
+
   /* Tighten up Google Maps Autocomplete dropdown z-index when inside sidebar */
   .pac-container {
     z-index: 9999 !important;

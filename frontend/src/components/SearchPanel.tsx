@@ -32,6 +32,7 @@ declare global {
   interface Window {
     __googleMapsReadyPromise: Promise<void>;
     __googleMapsReadyResolve: () => void;
+    __googleMapsReadyReject: (err: Error) => void;
     __googleMapsReady: () => void;
   }
 }
@@ -65,6 +66,8 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   const [gpsState, setGpsState] = useState<GpsState>("acquiring");
   const prefetchedGps = useRef<LatLon | null>(null);
   const gpsFetchPromise = useRef<Promise<LatLon | null> | null>(null);
+  const [dotCount, setDotCount] = useState(0);
+  const [showManualHint, setShowManualHint] = useState(false);
 
   useEffect(() => {
     const fetchGps = async (): Promise<LatLon | null> => {
@@ -88,6 +91,20 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     };
     gpsFetchPromise.current = fetchGps();
   }, []);
+
+  // Animate dots while acquiring
+  useEffect(() => {
+    if (gpsState !== "acquiring") { setDotCount(0); return; }
+    const id = setInterval(() => setDotCount(c => (c + 1) % 4), 500);
+    return () => clearInterval(id);
+  }, [gpsState]);
+
+  // Show "or set manually" hint after 5s of acquiring
+  useEffect(() => {
+    if (gpsState !== "acquiring") { setShowManualHint(false); return; }
+    const id = setTimeout(() => setShowManualHint(true), 5000);
+    return () => clearTimeout(id);
+  }, [gpsState]);
 
   // Sync map-picked destination into the input field
   useEffect(() => {
@@ -188,12 +205,39 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     e.preventDefault();
     setError(null);
 
-    const destination: LatLon | string = pickedDest
-      ? pickedDest.latLon
-      : extractLatLon(destPlace, "dest");
-    if (typeof destination === "string") { setError(destination); return; }
+    let destination: LatLon;
+    let destAddress: string;
 
-    const destAddress = pickedDest?.label ?? destPlace?.formatted_address ?? destInputRef.current?.value ?? "";
+    if (pickedDest) {
+      destination = pickedDest.latLon;
+      destAddress = pickedDest.label;
+    } else if (destPlace?.geometry?.location) {
+      const r = extractLatLon(destPlace, "dest");
+      if (typeof r === "string") { setError(r); return; }
+      destination = r;
+      destAddress = destPlace.formatted_address ?? destInputRef.current?.value ?? "";
+    } else {
+      // User typed but didn't pick from autocomplete — try geocoding
+      const destText = destInputRef.current?.value.trim() ?? "";
+      if (!destText) { setError(t("errorSelectDest")); return; }
+      setLocating(true);
+      try {
+        const geocoder = new google.maps.Geocoder();
+        const result = await geocoder.geocode({ address: destText });
+        const loc = result.results?.[0]?.geometry?.location;
+        if (!loc) { setError(t("errorDestNotFound")); return; }
+        const types = result.results[0].types ?? [];
+        if (types.length > 0 && types.every(type => TOO_BROAD_TYPES.has(type))) {
+          setError(t("errorTooBroadDest")); return;
+        }
+        destination = { lat: loc.lat(), lon: loc.lng() };
+        destAddress = result.results[0].formatted_address ?? destText;
+      } catch {
+        setError(t("errorDestNotFound")); return;
+      } finally {
+        setLocating(false);
+      }
+    }
     const originIsEmpty = !showOrigin || !originInputRef.current?.value.trim();
 
     if (originIsEmpty) {
@@ -225,10 +269,39 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
       onSearch(origin, destination, dt, "", destAddress, true);
     } else {
-      const origin = pickedOrigin
-        ? pickedOrigin.latLon
-        : extractLatLon(originPlace, "origin");
-      if (typeof origin === "string") { setError(origin); return; }
+      let origin: LatLon;
+      let originAddress: string;
+
+      if (pickedOrigin) {
+        origin = pickedOrigin.latLon;
+        originAddress = pickedOrigin.label;
+      } else if (originPlace?.geometry?.location) {
+        const r = extractLatLon(originPlace, "origin");
+        if (typeof r === "string") { setError(r); return; }
+        origin = r;
+        originAddress = originPlace.formatted_address ?? originInputRef.current?.value ?? "";
+      } else {
+        const originText = originInputRef.current?.value.trim() ?? "";
+        if (!originText) { setError(t("errorSelectOrigin")); return; }
+        setLocating(true);
+        try {
+          const geocoder = new google.maps.Geocoder();
+          const result = await geocoder.geocode({ address: originText });
+          const loc = result.results?.[0]?.geometry?.location;
+          if (!loc) { setError(t("errorOriginNotFound")); return; }
+          const types = result.results[0].types ?? [];
+          if (types.length > 0 && types.every(type => TOO_BROAD_TYPES.has(type))) {
+            setError(t("errorTooBroadOrigin")); return;
+          }
+          origin = { lat: loc.lat(), lon: loc.lng() };
+          originAddress = result.results[0].formatted_address ?? originText;
+        } catch {
+          setError(t("errorOriginNotFound")); return;
+        } finally {
+          setLocating(false);
+        }
+      }
+
       if (isTooClose(origin, destination)) {
         setError(t("errorSameLocation"));
         return;
@@ -237,7 +310,6 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         setError(t("errorTooFar"));
         return;
       }
-      const originAddress = originPlace?.formatted_address ?? originInputRef.current?.value ?? "";
       const dt = useNow ? new Date().toISOString() : new Date(datetimeValue).toISOString();
       onSearch(origin, destination, dt, originAddress, destAddress, false);
     }
@@ -316,14 +388,33 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
         overflow: "hidden",
         transition: "max-height 0.2s ease, opacity 0.15s ease",
       }}>
-          <span style={{ ...styles.gpsDot, backgroundColor: gpsDotColor }} />
+          <span style={{
+            ...styles.gpsDot,
+            backgroundColor: gpsDotColor,
+            animation: gpsState === "acquiring" ? "gpsPulse 1.2s ease-in-out infinite" : undefined,
+          }} />
           <span style={styles.originHintText}>
-            {gpsState === "acquiring" ? t("locatingYou") : gpsState === "ready" ? t("fromYourLocation") : t("locationUnavailable")}
+            {gpsState === "acquiring"
+              ? t("locatingYou") + ".".repeat(dotCount)
+              : gpsState === "ready" ? t("fromYourLocation") : t("locationUnavailable")}
           </span>
           <button type="button" style={styles.changeBtn} onClick={() => setShowOrigin(true)}>
             {t("change")}
           </button>
         </div>
+
+      {/* "or set manually" nudge after 5s of acquiring */}
+      <div style={{
+        maxHeight: (!showOrigin && gpsState === "acquiring" && showManualHint) ? 20 : 0,
+        opacity: (!showOrigin && gpsState === "acquiring" && showManualHint) ? 1 : 0,
+        overflow: "hidden",
+        transition: "max-height 0.4s ease, opacity 0.4s ease",
+        paddingLeft: 18,
+      }}>
+        <button type="button" style={styles.manualHintBtn} onClick={() => setShowOrigin(true)}>
+          {t("orSetManually")}
+        </button>
+      </div>
 
       {/* Time picker */}
       <div style={styles.timeRow}>
@@ -444,6 +535,16 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
     padding: 0,
     fontWeight: 600,
+  },
+  manualHintBtn: {
+    fontSize: 11,
+    color: "#2E7D32",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
+    textDecoration: "underline",
+    textDecorationStyle: "dotted",
   },
 
   originRow: {

@@ -59,9 +59,15 @@
             window.__googleMapsReadyResolve();
           }
         };
-        window.__googleMapsReadyPromise = new Promise(function (resolve) {
+        window.__googleMapsReadyPromise = new Promise(function (resolve, reject) {
           window.__googleMapsReadyResolve = resolve;
+          window.__googleMapsReadyReject = reject;
         });
+        script.onerror = function () {
+          if (window.__googleMapsReadyReject) {
+            window.__googleMapsReadyReject(new Error("Maps script failed to load"));
+          }
+        };
         document.head.appendChild(script);
       })();
     </script>

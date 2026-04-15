@@ -24,10 +24,13 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
   const originPickMarkerRef = useRef<google.maps.Marker | null>(null);
   const originPickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const [mapsReady, setMapsReady] = useState(false);
+  const [mapsError, setMapsError] = useState(false);
 
   // Wait for Maps API to be available
   useEffect(() => {
-    window.__googleMapsReadyPromise.then(() => setMapsReady(true));
+    window.__googleMapsReadyPromise
+      .then(() => setMapsReady(true))
+      .catch(() => setMapsError(true));
   }, []);
 
   // Stop any GPU work while the app is in the background (Page Visibility API).
@@ -253,7 +256,16 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
 
   return (
     <div style={styles.wrapper}>
-      {!mapsReady && (
+      {mapsError ? (
+        <div style={styles.loadingOverlay}>
+          <div style={styles.errorOverlayContent}>
+            <p style={styles.loadingText}>{t("mapNoConnection")}</p>
+            <button style={styles.retryMapBtn} onClick={() => window.location.reload()}>
+              {t("tryAgain")}
+            </button>
+          </div>
+        </div>
+      ) : !mapsReady && (
         <div style={styles.loadingOverlay}>
           <p style={styles.loadingText}>{t("loadingMap")}</p>
         </div>
@@ -295,6 +307,22 @@ const styles: Record<string, CSSProperties> = {
   loadingText: {
     fontSize: 16,
     color: "#888",
+  },
+  errorOverlayContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 16,
+  },
+  retryMapBtn: {
+    padding: "9px 24px",
+    borderRadius: 20,
+    border: "none",
+    backgroundColor: "#2E7D32",
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
   },
   pickHint: {
     position: "absolute",
