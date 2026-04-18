@@ -75,10 +75,11 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     try {
       const { location: status } = await Geolocation.checkPermissions();
       if (status === "denied") { setGpsState("denied"); return null; }
-      if (status === "prompt" || status === "prompt-with-rationale") {
+      if (Capacitor.isNativePlatform() && (status === "prompt" || status === "prompt-with-rationale")) {
         const result = await Geolocation.requestPermissions();
         if (result.location !== "granted") { setGpsState("denied"); return null; }
       }
+      // On web, getCurrentPosition() itself triggers the browser permission prompt
       const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
       const loc: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
       prefetchedGps.current = loc;
@@ -200,8 +201,13 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   }, [gpsState]);
 
   function handleLocationRetry() {
-    if (gpsState === "denied" && Capacitor.isNativePlatform()) {
-      window.open("app-settings:", "_self");
+    if (gpsState === "denied") {
+      if (Capacitor.isNativePlatform()) {
+        window.open("app-settings:", "_self");
+      } else {
+        // On web, browser won't re-prompt — guide user to enable in browser settings
+        alert(t("enableLocationInBrowser", "To enable location, open your browser settings and allow location access for this site."));
+      }
     } else {
       gpsFetchPromise.current = fetchGps();
     }
