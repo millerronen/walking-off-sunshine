@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { Geolocation } from "@capacitor/geolocation";
+import { Capacitor } from "@capacitor/core";
 import type { LatLon } from "../types";
 
 interface Props {
@@ -69,26 +70,28 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   const [dotCount, setDotCount] = useState(0);
   const [showManualHint, setShowManualHint] = useState(false);
 
-  useEffect(() => {
-    const fetchGps = async (): Promise<LatLon | null> => {
-      try {
-        const { location: status } = await Geolocation.checkPermissions();
-        if (status === "denied") { setGpsState("denied"); return null; }
-        if (status === "prompt" || status === "prompt-with-rationale") {
-          const result = await Geolocation.requestPermissions();
-          if (result.location !== "granted") { setGpsState("denied"); return null; }
-        }
-        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
-        const loc: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        prefetchedGps.current = loc;
-        setGpsState("ready");
-        onGpsAcquired?.(loc);
-        return loc;
-      } catch {
-        setGpsState("error");
-        return null;
+  const fetchGps = async (): Promise<LatLon | null> => {
+    setGpsState("acquiring");
+    try {
+      const { location: status } = await Geolocation.checkPermissions();
+      if (status === "denied") { setGpsState("denied"); return null; }
+      if (status === "prompt" || status === "prompt-with-rationale") {
+        const result = await Geolocation.requestPermissions();
+        if (result.location !== "granted") { setGpsState("denied"); return null; }
       }
-    };
+      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 });
+      const loc: LatLon = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      prefetchedGps.current = loc;
+      setGpsState("ready");
+      onGpsAcquired?.(loc);
+      return loc;
+    } catch {
+      setGpsState("error");
+      return null;
+    }
+  };
+
+  useEffect(() => {
     gpsFetchPromise.current = fetchGps();
   }, []);
 
@@ -178,6 +181,30 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     }
 
     return { lat: loc.lat(), lon: loc.lng() };
+  }
+
+  // Re-check GPS when app returns to foreground (e.g. after changing permissions in Settings)
+  useEffect(() => {
+    const onResume = () => {
+      if (gpsState === "denied" || gpsState === "error") {
+        gpsFetchPromise.current = fetchGps();
+      }
+    };
+    document.addEventListener("resume", onResume);           // Capacitor native
+    document.addEventListener("visibilitychange", () => {    // Web fallback
+      if (document.visibilityState === "visible") onResume();
+    });
+    return () => {
+      document.removeEventListener("resume", onResume);
+    };
+  }, [gpsState]);
+
+  function handleLocationRetry() {
+    if (gpsState === "denied" && Capacitor.isNativePlatform()) {
+      window.open("app-settings:", "_self");
+    } else {
+      gpsFetchPromise.current = fetchGps();
+    }
   }
 
   function handleUseGps() {
@@ -392,11 +419,20 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
             ...styles.gpsDot,
             backgroundColor: gpsDotColor,
             animation: gpsState === "acquiring" ? "gpsPulse 1.2s ease-in-out infinite" : undefined,
-          }} />
-          <span style={styles.originHintText}>
+            cursor: (gpsState === "denied" || gpsState === "error") ? "pointer" : undefined,
+          }} onClick={(gpsState === "denied" || gpsState === "error") ? handleLocationRetry : undefined} />
+          <span
+            style={{
+              ...styles.originHintText,
+              cursor: (gpsState === "denied" || gpsState === "error") ? "pointer" : undefined,
+              textDecoration: (gpsState === "denied" || gpsState === "error") ? "underline" : undefined,
+              color: (gpsState === "denied" || gpsState === "error") ? "#2E7D32" : undefined,
+            }}
+            onClick={(gpsState === "denied" || gpsState === "error") ? handleLocationRetry : undefined}
+          >
             {gpsState === "acquiring"
               ? t("locatingYou") + ".".repeat(dotCount)
-              : gpsState === "ready" ? t("fromYourLocation") : t("locationUnavailable")}
+              : gpsState === "ready" ? t("fromYourLocation") : t("locationUnavailable") + " ↻"}
           </span>
           <button type="button" style={styles.changeBtn} onClick={() => setShowOrigin(true)}>
             {t("change")}
