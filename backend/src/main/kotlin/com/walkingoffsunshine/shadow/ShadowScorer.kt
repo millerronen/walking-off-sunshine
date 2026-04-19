@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.ZonedDateTime
+import java.util.concurrent.CompletableFuture
 import kotlin.math.*
 
 @Service
@@ -46,9 +47,15 @@ class ShadowScorer(
 
         val t0 = System.currentTimeMillis()
         val bbox = polyline.boundingBox(bufferMeters)
-        val buildings = buildingFetcher.fetchBuildings(bbox.south, bbox.west, bbox.north, bbox.east)
+        val buildingsFuture = CompletableFuture.supplyAsync {
+            buildingFetcher.fetchBuildings(bbox.south, bbox.west, bbox.north, bbox.east)
+        }
+        val treesFuture = CompletableFuture.supplyAsync {
+            treeFetcher.fetchTrees(bbox.south, bbox.west, bbox.north, bbox.east)
+        }
+        val buildings = buildingsFuture.get()
         val t1 = System.currentTimeMillis()
-        val trees = treeFetcher.fetchTrees(bbox.south, bbox.west, bbox.north, bbox.east)
+        val trees = treesFuture.get()
         val t2 = System.currentTimeMillis()
         val shadowPolygons = (buildings + trees).mapNotNull { it.shadowPolygon(sunPos) }
         log.info("SCORE buildings=${t1-t0}ms trees=${t2-t1}ms | b=${buildings.size} t=${trees.size} shadows=${shadowPolygons.size}")
