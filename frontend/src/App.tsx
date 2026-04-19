@@ -75,6 +75,23 @@ export default function App() {
     }
   }
 
+  function handleReset() {
+    setStatus("idle");
+    setRoutes([]);
+    setSelectedTier(null);
+    setErrorMessage(null);
+    setOriginAddress("");
+    setDestAddress("");
+    setUsingGpsOrigin(false);
+    setWeatherNote(null);
+    setSheetExpanded(false);
+    setPickedDest(null);
+    setPickedOrigin(null);
+    setPickingDest(false);
+    setPickingOrigin(false);
+    setGpsOriginLatLon(null);
+  }
+
   const hasResults = status === "success" && routes.length > 0;
   const showSheet = hasResults || status === "loading" || status === "error";
 
@@ -105,6 +122,8 @@ export default function App() {
           onPickOriginOnMap={() => { setPickingOrigin(true); setPickingDest(false); }}
           onClearPickedOrigin={() => setPickedOrigin(null)}
           onGpsAcquired={(latLon) => setGpsOriginLatLon(latLon)}
+          hasResults={hasResults}
+          onReset={handleReset}
         />
       </div>
 
@@ -155,7 +174,7 @@ export default function App() {
           {/* Weather banner */}
           {hasResults && weatherNote && (
             <div style={styles.weatherBanner}>
-              {weatherNote}
+              {t(`weatherNote_${weatherNote}`, weatherNote)}
             </div>
           )}
 

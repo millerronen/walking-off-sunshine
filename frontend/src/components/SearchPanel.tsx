@@ -27,6 +27,8 @@ interface Props {
   onPickOriginOnMap: () => void;
   onClearPickedOrigin: () => void;
   onGpsAcquired?: (latLon: LatLon) => void;
+  hasResults: boolean;
+  onReset: () => void;
 }
 
 declare global {
@@ -48,7 +50,7 @@ function toLocalDatetimeValue(date: Date): string {
 
 const MAX_WALKING_METRES = 20_000;
 
-export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest, pickedOrigin, onPickOriginOnMap, onClearPickedOrigin, onGpsAcquired }: Props) {
+export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, onClearPickedDest, pickedOrigin, onPickOriginOnMap, onClearPickedOrigin, onGpsAcquired, hasResults, onReset }: Props) {
   const { t } = useTranslation();
   const originInputRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
@@ -220,6 +222,17 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
     if (originInputRef.current) originInputRef.current.value = "";
   }
 
+  function handleReset() {
+    clearDest();
+    clearOrigin();
+    setShowOrigin(false);
+    setUseNow(true);
+    setError(null);
+    // Re-trigger GPS acquisition like on app startup
+    gpsFetchPromise.current = fetchGps();
+    onReset();
+  }
+
   function clearDest() {
     onClearPickedDest();
     setDestPlace(null);
@@ -357,6 +370,11 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
       <div style={styles.header}>
         <span style={styles.sun}>☀️</span>
         <span style={styles.title}>{t("appTitle")}</span>
+        {hasResults && (
+          <button type="button" style={styles.newSearchBtn} onClick={handleReset}>
+            {t("newSearch")}
+          </button>
+        )}
       </div>
 
       {/* Origin (optional, hidden by default) — always rendered so transition is smooth */}
@@ -512,7 +530,18 @@ const styles: Record<string, CSSProperties> = {
     gap: 6,
   },
   sun: { fontSize: 20 },
-  title: { fontSize: 15, fontWeight: 700, color: "#1a1a1a" },
+  title: { fontSize: 15, fontWeight: 700, color: "#1a1a1a", flex: 1 },
+  newSearchBtn: {
+    fontSize: 12,
+    color: "#2E7D32",
+    background: "#E8F5E9",
+    border: "none",
+    borderRadius: 20,
+    padding: "5px 12px",
+    cursor: "pointer",
+    fontWeight: 600,
+    whiteSpace: "nowrap",
+  },
 
   destRow: {
     backgroundColor: "#f5f5f5",

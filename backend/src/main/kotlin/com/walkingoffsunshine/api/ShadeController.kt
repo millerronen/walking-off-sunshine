@@ -3,6 +3,7 @@ package com.walkingoffsunshine.api
 import com.walkingoffsunshine.routes.GoogleRoutesClient
 import com.walkingoffsunshine.shadow.ShadowScorer
 import com.walkingoffsunshine.shadow.haversineMeters
+import com.walkingoffsunshine.sun.SunPositionService
 import com.walkingoffsunshine.weather.WeatherCondition
 import com.walkingoffsunshine.weather.WeatherService
 import org.springframework.web.bind.annotation.CrossOrigin
@@ -30,6 +31,7 @@ class ShadeController(
     private val shadowScorer: ShadowScorer,
     private val googleRoutesClient: GoogleRoutesClient,
     private val weatherService: WeatherService,
+    private val sunPositionService: SunPositionService,
 ) {
     private val log = LoggerFactory.getLogger(ShadeController::class.java)
     private val executor = Executors.newCachedThreadPool()
@@ -103,9 +105,14 @@ class ShadeController(
             routeCache.remove(cacheKey)
         }
 
+        // Check sun position early — if nighttime, shade scoring is meaningless
+        val sunPos = sunPositionService.getPosition(request.origin.lat, request.origin.lon, dt)
+        val isNight = !sunPos.isDaytime
+
         // Fire weather check in parallel — it will be ready by the time routes are fetched
         val hoursFromNow = abs(ChronoUnit.HOURS.between(ZonedDateTime.now(), dt))
-        val weatherFuture = if (hoursFromNow < 2)
+        val weatherFuture = if (isNight) CompletableFuture.completedFuture(WeatherCondition.CLEAR)
+        else if (hoursFromNow < 2)
             CompletableFuture.supplyAsync({ weatherService.getCondition(request.origin) }, executor)
         else
             CompletableFuture.completedFuture(WeatherCondition.CLEAR)
@@ -114,41 +121,50 @@ class ShadeController(
         val directCandidates = googleRoutesClient.fetchWalkingRoutes(request.origin, request.destination)
         log.info("TIMING direct_routes=${ms()}ms count=${directCandidates.size}")
         if (directCandidates.isEmpty()) {
-            return RouteResponse(routes = emptyList(), shortestDistanceMeters = 0.0,
-                weatherNote = weatherNoteFor(weatherFuture.get()))
+            return RouteResponse(routes = emptyList(), shortestDistanceMeters = 0.0, weatherNote = null)
         }
 
         val shortestDistance = directCandidates.minOf { it.distanceMeters }.toDouble()
-        val maxAllowedDistance = shortestDistance * 1.50
 
         // Resolve weather now (already in-flight alongside direct route fetch, so near-instant)
         val weatherCondition = weatherFuture.get()
-        log.info("TIMING weather=${ms()}ms condition=$weatherCondition")
-        val weatherNote = weatherNoteFor(weatherCondition)
+        log.info("TIMING weather=${ms()}ms condition=$weatherCondition night=$isNight")
 
-        // Circuit breaker: if rain/overcast, all routes are equally shaded — skip waypoint fetches
-        val waypointCandidates = if (weatherCondition != WeatherCondition.CLEAR) {
-            log.info("TIMING weather_override — skipping waypoints and scoring")
-            emptyList()
-        } else {
-            val waypointFutures = perpendicularWaypoints(request.origin, request.destination, shortestDistance).map { wp ->
-                CompletableFuture.supplyAsync({
-                    googleRoutesClient.fetchWalkingRouteViaWaypoint(request.origin, wp, request.destination)
-                }, executor)
-            }
-            waypointFutures.mapNotNull { it.get() }.also {
-                log.info("TIMING waypoint_routes=${ms()}ms count=${it.size}")
-            }
+        // Circuit breaker: if nighttime or non-clear weather, shade doesn't vary — return only shortest route
+        val skipShadeScoring = isNight || weatherCondition != WeatherCondition.CLEAR
+        if (skipShadeScoring) {
+            log.info("TIMING shortcut — night=$isNight weather=$weatherCondition — returning shortest only")
+            val shortest = directCandidates.minByOrNull { it.distanceMeters }!!
+            val tierRoutes = listOf(ShadeTierRoute(
+                tierPercent = 100,
+                shadeScore = 1.0,
+                distanceMeters = shortest.distanceMeters.toDouble(),
+                durationSeconds = shortest.durationSeconds,
+                polyline = shortest.polyline,
+            ))
+            val weatherNote = if (isNight) "nighttime" else "overcast"
+            val response = RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = weatherNote)
+            routeCache[cacheKey] = Pair(System.currentTimeMillis(), response)
+            log.info("TIMING total=${ms()}ms routes=1 (shortcut)")
+            return response
+        }
+
+        val maxAllowedDistance = shortestDistance * 1.50
+
+        // Fetch waypoint routes in parallel for route diversity
+        val waypointFutures = perpendicularWaypoints(request.origin, request.destination, shortestDistance).map { wp ->
+            CompletableFuture.supplyAsync({
+                googleRoutesClient.fetchWalkingRouteViaWaypoint(request.origin, wp, request.destination)
+            }, executor)
+        }
+        val waypointCandidates = waypointFutures.mapNotNull { it.get() }.also {
+            log.info("TIMING waypoint_routes=${ms()}ms count=${it.size}")
         }
 
         val candidates = (directCandidates + waypointCandidates).distinctBy { routeKey(it) }
 
-        // Circuit breaker: if weather overrides shade (rain/overcast), skip building+tree scoring entirely
-        val overrideShade = weatherCondition != WeatherCondition.CLEAR
         val filtered = candidates.filter { it.distanceMeters <= maxAllowedDistance }
-        val scored: List<Triple<com.walkingoffsunshine.routes.CandidateRoute, Double, Double>> = if (overrideShade) {
-            filtered.map { Triple(it, 1.0, it.distanceMeters.toDouble()) }
-        } else {
+        val scored: List<Triple<com.walkingoffsunshine.routes.CandidateRoute, Double, Double>> = run {
             val scoreFutures = filtered.map { candidate ->
                 CompletableFuture.supplyAsync({
                     val segments = shadowScorer.scorePolyline(candidate.polyline, dt)
@@ -163,7 +179,7 @@ class ShadeController(
             }
         }
 
-        // Always return exactly 2 routes: shadiest and shortest.
+        // Return up to 2 routes: shadiest and shortest (if different).
         val shadiest = scored.maxByOrNull { (_, shade, _) -> shade }
         val shortest = scored.minByOrNull { (candidate, _, _) -> candidate.distanceMeters }
 
@@ -188,14 +204,12 @@ class ShadeController(
             }
         }
 
-        val response = RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = weatherNote)
+        val response = RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = null)
         routeCache[cacheKey] = Pair(System.currentTimeMillis(), response)
         log.info("TIMING total=${ms()}ms routes=${tierRoutes.size}")
         return response
     }
 }
-
-private fun weatherNoteFor(condition: WeatherCondition): String? = null
 
 private fun routeCacheKey(origin: LatLon, destination: LatLon, dt: ZonedDateTime): String {
     val o = "%.4f,%.4f".format(origin.lat, origin.lon)

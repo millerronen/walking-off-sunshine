@@ -41,5 +41,8 @@
   "errorDestNotFound": "Could not find that destination. Please try a more specific address.",
   "errorOriginNotFound": "Could not find that starting point. Please try a more specific address.",
   "errorTooBroadDest": "That destination is too broad (e.g. a country or region). Please enter a specific street or place.",
-  "errorTooBroadOrigin": "That origin is too broad (e.g. a country or region). Please enter a specific street or place."
+  "errorTooBroadOrigin": "That origin is too broad (e.g. a country or region). Please enter a specific street or place.",
+  "newSearch": "New Search",
+  "weatherNote_nighttime": "It's nighttime — showing the shortest route.",
+  "weatherNote_overcast": "It's cloudy — shade won't vary, showing the shortest route."
 }

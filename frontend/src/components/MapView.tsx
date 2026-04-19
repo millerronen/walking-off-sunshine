@@ -92,11 +92,13 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
 
   // Draw / redraw polylines whenever routes change
   useEffect(() => {
-    if (!mapRef.current || routes.length === 0) return;
+    if (!mapRef.current) return;
 
     // Remove existing polylines
     polylinesRef.current.forEach((pl) => pl.setMap(null));
     polylinesRef.current.clear();
+
+    if (routes.length === 0) return;
 
     const bounds = new google.maps.LatLngBounds();
 
