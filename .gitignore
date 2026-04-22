@@ -23,5 +23,11 @@ frontend/ios/App/Pods/
 frontend/ios/.xcode.env.local
 frontend/android/local.properties
 
+# Python
+.venv/
+
+# Assets
+icon-512.png
+
 # Claude Code
 .claude/
