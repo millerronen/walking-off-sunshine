@@ -108,7 +108,7 @@ export function SearchPanel({ onSearch, isLoading, pickedDest, onPickDestOnMap, 
   // Show "or set manually" hint after 5s of acquiring
   useEffect(() => {
     if (gpsState !== "acquiring") { setShowManualHint(false); return; }
-    const id = setTimeout(() => setShowManualHint(true), 5000);
+    const id = setTimeout(() => setShowManualHint(true), 8000);
     return () => clearTimeout(id);
   }, [gpsState]);
 
