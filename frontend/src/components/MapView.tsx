@@ -17,7 +17,7 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const polylinesRef = useRef<Map<TierPercent, google.maps.Polyline>>(new Map());
+  const polylinesRef = useRef<Map<TierPercent, google.maps.Polyline[]>>(new Map());
   const gpsMarkerRef = useRef<google.maps.Marker | null>(null);
   const pickMarkerRef = useRef<google.maps.Marker | null>(null);
   const pickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
@@ -95,7 +95,7 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
     if (!mapRef.current) return;
 
     // Remove existing polylines
-    polylinesRef.current.forEach((pl) => pl.setMap(null));
+    polylinesRef.current.forEach((pls) => pls.forEach((pl) => pl.setMap(null)));
     polylinesRef.current.clear();
 
     if (routes.length === 0) return;
@@ -103,30 +103,57 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
     const bounds = new google.maps.LatLngBounds();
 
     // Draw dimmest routes first so the selected / higher routes sit on top.
-    // We'll sort by tierPercent ascending so 25 is drawn first (under others).
     const sorted = [...routes].sort((a, b) => a.tierPercent - b.tierPercent);
 
     sorted.forEach((route) => {
-      const path = route.polyline.map((pt) => ({
-        lat: pt.lat,
-        lng: pt.lon,
-      }));
-
-      path.forEach((pt) => bounds.extend(pt));
-
       const isSelected =
         selectedTier === null || selectedTier === route.tierPercent;
+      const opacity = isSelected ? 0.95 : 0.3;
+      const baseColor = TIER_COLORS[route.tierPercent];
+      const scores = route.segmentShadeScores;
+      const segments: google.maps.Polyline[] = [];
 
-      const polyline = new google.maps.Polyline({
-        path,
-        strokeColor: TIER_COLORS[route.tierPercent],
-        strokeOpacity: isSelected ? 0.95 : 0.3,
-        strokeWeight: selectedTier === route.tierPercent ? 7 : 4,
-        map: mapRef.current!,
-        zIndex: route.tierPercent, // higher shade = drawn on top
-      });
+      if (scores && scores.length === route.polyline.length - 1) {
+        // Draw per-segment polylines with varying thickness
+        for (let i = 0; i < scores.length; i++) {
+          const from = route.polyline[i];
+          const to = route.polyline[i + 1];
+          const path = [
+            { lat: from.lat, lng: from.lon },
+            { lat: to.lat, lng: to.lon },
+          ];
+          path.forEach((pt) => bounds.extend(pt));
 
-      polylinesRef.current.set(route.tierPercent, polyline);
+          // Thickness: 2px (no shade) to 8px (full shade)
+          const weight = 2 + scores[i] * 6;
+
+          segments.push(new google.maps.Polyline({
+            path,
+            strokeColor: baseColor,
+            strokeOpacity: opacity,
+            strokeWeight: weight,
+            map: mapRef.current!,
+            zIndex: route.tierPercent,
+          }));
+        }
+      } else {
+        // Fallback: single polyline (no per-segment data)
+        const path = route.polyline.map((pt) => ({
+          lat: pt.lat,
+          lng: pt.lon,
+        }));
+        path.forEach((pt) => bounds.extend(pt));
+        segments.push(new google.maps.Polyline({
+          path,
+          strokeColor: baseColor,
+          strokeOpacity: opacity,
+          strokeWeight: selectedTier === route.tierPercent ? 7 : 4,
+          map: mapRef.current!,
+          zIndex: route.tierPercent,
+        }));
+      }
+
+      polylinesRef.current.set(route.tierPercent, segments);
     });
 
     mapRef.current.fitBounds(bounds, { top: 60, right: 40, bottom: 40, left: 40 });
@@ -267,11 +294,12 @@ export function MapView({ routes, selectedTier, gpsOrigin, pickingDest, onMapPic
 
   // Update polyline appearance when selectedTier changes without redrawing
   useEffect(() => {
-    polylinesRef.current.forEach((pl, tier) => {
+    polylinesRef.current.forEach((pls, tier) => {
       const isSelected = selectedTier === null || selectedTier === tier;
-      pl.setOptions({
-        strokeOpacity: isSelected ? 0.95 : 0.3,
-        strokeWeight: selectedTier === tier ? 7 : 4,
+      pls.forEach((pl) => {
+        pl.setOptions({
+          strokeOpacity: isSelected ? 0.95 : 0.3,
+        });
       });
     });
   }, [selectedTier]);

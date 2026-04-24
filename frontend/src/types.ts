@@ -18,6 +18,8 @@ export interface ShadeRoute {
   durationSeconds: number;
   /** Ordered list of points that form the route polyline */
   polyline: LatLon[];
+  /** Per-segment shade score (0.0–1.0), one entry per consecutive polyline pair */
+  segmentShadeScores?: number[];
 }
 
 /** Full response from POST /api/routes */

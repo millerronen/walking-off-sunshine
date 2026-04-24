@@ -82,7 +82,10 @@ class BuildingFetcher(
                     }, tileExecutor).also { f -> f.whenComplete { _, _ -> tileInFlight.remove(tile) } }
                 }
         }
-        return futures.flatMap { it.get() }.distinctBy { it.footprint.toText() }
+        return futures.flatMap { it.get() }.distinctBy {
+            val env = it.footprint.envelopeInternal
+            "${env.minX},${env.minY},${env.maxX},${env.maxY}"
+        }
     }
 
     private fun fetchTile(tile: TileKey): List<Building> {

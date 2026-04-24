@@ -10,6 +10,7 @@ import com.walkingoffsunshine.sun.SunPositionService
 import org.locationtech.jts.geom.Coordinate
 import org.locationtech.jts.geom.GeometryFactory
 import org.locationtech.jts.geom.Polygon
+import org.locationtech.jts.index.strtree.STRtree
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -58,20 +59,28 @@ class ShadowScorer(
         val trees = treesFuture.get()
         val t2 = System.currentTimeMillis()
         val shadowPolygons = (buildings + trees).mapNotNull { it.shadowPolygon(sunPos) }
-        log.info("SCORE buildings=${t1-t0}ms trees=${t2-t1}ms | b=${buildings.size} t=${trees.size} shadows=${shadowPolygons.size}")
+        val t3 = System.currentTimeMillis()
+
+        // Build spatial index for fast point-in-polygon queries (critical with 10K+ shadows)
+        val shadowIndex = STRtree()
+        shadowPolygons.forEach { shadowIndex.insert(it.envelopeInternal, it) }
+        shadowIndex.build()
+
+        log.info("SCORE buildings=${t1-t0}ms trees=${t2-t1}ms index=${System.currentTimeMillis()-t3}ms | b=${buildings.size} t=${trees.size} shadows=${shadowPolygons.size}")
 
         return polyline.zipWithNext().map { (from, to) ->
             val dist = haversineMeters(from, to)
-            val shade = sampleSegmentShade(from, to, shadowPolygons)
+            val shade = sampleSegmentShade(from, to, shadowIndex)
             ScoredSegment(from = from, to = to, distanceMeters = dist, shadeScore = shade)
         }
     }
 
     /**
-     * Samples N points along a segment and checks each against shadow polygons.
+     * Samples N points along a segment and checks each against shadow polygons
+     * using a spatial index for O(log n) lookup instead of O(n).
      */
-    private fun sampleSegmentShade(from: LatLon, to: LatLon, shadowPolygons: List<Polygon>): Double {
-        if (shadowPolygons.isEmpty()) return 0.0
+    private fun sampleSegmentShade(from: LatLon, to: LatLon, shadowIndex: STRtree): Double {
+        if (shadowIndex.size() == 0) return 0.0
         var shadedCount = 0
 
         repeat(samplesPerSegment) { i ->
@@ -79,7 +88,10 @@ class ShadowScorer(
             val lat = from.lat + t * (to.lat - from.lat)
             val lon = from.lon + t * (to.lon - from.lon)
             val point = geometryFactory.createPoint(Coordinate(lon, lat))
-            if (shadowPolygons.any { it.contains(point) }) shadedCount++
+            val envelope = point.envelopeInternal
+            @Suppress("UNCHECKED_CAST")
+            val candidates = shadowIndex.query(envelope) as List<Polygon>
+            if (candidates.any { it.contains(point) }) shadedCount++
         }
 
         return shadedCount.toDouble() / samplesPerSegment

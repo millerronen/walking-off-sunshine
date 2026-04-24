@@ -53,4 +53,6 @@ data class ShadeTierRoute(
     val distanceMeters: Double,
     val durationSeconds: Int,
     val polyline: List<LatLon>,
+    /** Per-segment shade score (0.0–1.0), one entry per consecutive polyline pair */
+    val segmentShadeScores: List<Double> = emptyList(),
 )

@@ -164,14 +164,20 @@ class ShadeController(
         val candidates = (directCandidates + waypointCandidates).distinctBy { routeKey(it) }
 
         val filtered = candidates.filter { it.distanceMeters <= maxAllowedDistance }
-        val scored: List<Triple<com.walkingoffsunshine.routes.CandidateRoute, Double, Double>> = run {
+        data class ScoredCandidate(
+            val candidate: com.walkingoffsunshine.routes.CandidateRoute,
+            val shade: Double,
+            val totalDist: Double,
+            val segmentScores: List<Double>,
+        )
+        val scored: List<ScoredCandidate> = run {
             val scoreFutures = filtered.map { candidate ->
                 CompletableFuture.supplyAsync({
                     val segments = shadowScorer.scorePolyline(candidate.polyline, dt)
                     val totalDist = segments.sumOf { it.distanceMeters }
                     val shade = if (totalDist == 0.0) 0.0
                         else segments.sumOf { it.shadeScore * it.distanceMeters } / totalDist
-                    Triple(candidate, shade, totalDist)
+                    ScoredCandidate(candidate, shade, totalDist, segments.map { it.shadeScore })
                 }, executor)
             }
             scoreFutures.map { it.get() }.also {
@@ -180,26 +186,28 @@ class ShadeController(
         }
 
         // Return up to 2 routes: shadiest and shortest (if different).
-        val shadiest = scored.maxByOrNull { (_, shade, _) -> shade }
-        val shortest = scored.minByOrNull { (candidate, _, _) -> candidate.distanceMeters }
+        val shadiest = scored.maxByOrNull { it.shade }
+        val shortest = scored.minByOrNull { it.candidate.distanceMeters }
 
         val tierRoutes = buildList {
             if (shadiest != null) {
                 add(ShadeTierRoute(
                     tierPercent = 100,
-                    shadeScore = shadiest.second,
-                    distanceMeters = shadiest.third,
-                    durationSeconds = shadiest.first.durationSeconds,
-                    polyline = shadiest.first.polyline,
+                    shadeScore = shadiest.shade,
+                    distanceMeters = shadiest.totalDist,
+                    durationSeconds = shadiest.candidate.durationSeconds,
+                    polyline = shadiest.candidate.polyline,
+                    segmentShadeScores = shadiest.segmentScores,
                 ))
             }
-            if (shortest != null && shadiest != null && routeKey(shortest.first) != routeKey(shadiest.first)) {
+            if (shortest != null && shadiest != null && routeKey(shortest.candidate) != routeKey(shadiest.candidate)) {
                 add(ShadeTierRoute(
                     tierPercent = 25,
-                    shadeScore = shortest.second,
-                    distanceMeters = shortest.third,
-                    durationSeconds = shortest.first.durationSeconds,
-                    polyline = shortest.first.polyline,
+                    shadeScore = shortest.shade,
+                    distanceMeters = shortest.totalDist,
+                    durationSeconds = shortest.candidate.durationSeconds,
+                    polyline = shortest.candidate.polyline,
+                    segmentShadeScores = shortest.segmentScores,
                 ))
             }
         }
