@@ -26,6 +26,7 @@ export default function App() {
   const [usingGpsOrigin, setUsingGpsOrigin] = useState(false);
   const [gpsOriginLatLon, setGpsOriginLatLon] = useState<LatLon | null>(null);
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [topCollapsed, setTopCollapsed] = useState(false);
   const [weatherNote, setWeatherNote] = useState<string | null>(null);
   const [pickingDest, setPickingDest] = useState(false);
   const [pickedDest, setPickedDest] = useState<{ latLon: LatLon; label: string } | null>(null);
@@ -67,6 +68,7 @@ export default function App() {
       setRoutes(data.routes);
       setWeatherNote(data.weatherNote ?? null);
       setStatus("success");
+      setTopCollapsed(true);
     } catch (err) {
       const isTimeout = err instanceof Error && err.name === "TimeoutError";
       setIsTimeoutError(isTimeout);
@@ -85,6 +87,7 @@ export default function App() {
     setUsingGpsOrigin(false);
     setWeatherNote(null);
     setSheetExpanded(false);
+    setTopCollapsed(false);
     setPickedDest(null);
     setPickedOrigin(null);
     setPickingDest(false);
@@ -112,19 +115,31 @@ export default function App() {
 
       {/* Top search card */}
       <div style={styles.topCard}>
-        <SearchPanel
-          onSearch={handleSearch}
-          isLoading={status === "loading"}
-          pickedDest={pickedDest}
-          onPickDestOnMap={() => { setPickingDest(true); setPickingOrigin(false); }}
-          onClearPickedDest={() => setPickedDest(null)}
-          pickedOrigin={pickedOrigin}
-          onPickOriginOnMap={() => { setPickingOrigin(true); setPickingDest(false); }}
-          onClearPickedOrigin={() => setPickedOrigin(null)}
-          onGpsAcquired={(latLon) => setGpsOriginLatLon(latLon)}
-          hasResults={hasResults}
-          onReset={handleReset}
-        />
+        <div style={{
+          ...styles.topCardInner,
+          maxHeight: topCollapsed ? 52 : 600,
+          overflow: "hidden",
+          transition: "max-height 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
+        }}>
+          <SearchPanel
+            onSearch={handleSearch}
+            isLoading={status === "loading"}
+            pickedDest={pickedDest}
+            onPickDestOnMap={() => { setPickingDest(true); setPickingOrigin(false); }}
+            onClearPickedDest={() => setPickedDest(null)}
+            pickedOrigin={pickedOrigin}
+            onPickOriginOnMap={() => { setPickingOrigin(true); setPickingDest(false); }}
+            onClearPickedOrigin={() => setPickedOrigin(null)}
+            onGpsAcquired={(latLon) => setGpsOriginLatLon(latLon)}
+            hasResults={hasResults}
+            onReset={handleReset}
+          />
+        </div>
+        {hasResults && (
+          <div style={styles.topHandle} onClick={() => setTopCollapsed((v) => !v)}>
+            <div style={styles.topHandleBar} />
+          </div>
+        )}
       </div>
 
       {/* Bottom sheet */}
@@ -220,12 +235,25 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     zIndex: 20,
-    // Split into separate properties so horizontal padding is never affected
-    // by env() parsing — safe-area-inset-top only applies to paddingTop
     paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
     paddingLeft: 12,
     paddingRight: 12,
     paddingBottom: 0,
+  },
+  topCardInner: {
+    borderRadius: 16,
+  },
+  topHandle: {
+    display: "flex",
+    justifyContent: "center",
+    padding: "6px 0 4px",
+    cursor: "pointer",
+  },
+  topHandleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ccc",
   },
   sheet: {
     position: "absolute",
