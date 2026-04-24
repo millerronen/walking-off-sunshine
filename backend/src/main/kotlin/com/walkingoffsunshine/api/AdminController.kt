@@ -1,14 +1,20 @@
 package com.walkingoffsunshine.api
 
+import com.walkingoffsunshine.buildings.OpenTreeBaseImporter
 import com.walkingoffsunshine.buildings.PrewarmService
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.util.concurrent.Executors
 
 @RestController
 @RequestMapping("/api/admin")
-class AdminController(private val prewarmService: PrewarmService) {
+class AdminController(
+    private val prewarmService: PrewarmService,
+    private val openTreeBaseImporter: OpenTreeBaseImporter,
+) {
+    private val importExecutor = Executors.newSingleThreadExecutor()
 
     /**
      * Triggers a background GCS tile cache prewarm for a bounding box.
@@ -25,5 +31,18 @@ class AdminController(private val prewarmService: PrewarmService) {
     ): Map<String, Any> {
         val queued = prewarmService.start(south, west, north, east)
         return mapOf("status" to "started", "tilesQueued" to queued)
+    }
+
+    /**
+     * Imports the OpenTreeBase national tree dataset into the GCS tile cache.
+     * Downloads ~1.6 GB GeoJSON, splits into tiles, and writes to GCS.
+     * Returns immediately; the import runs in the background.
+     *
+     * Example: POST /api/admin/import-opentreebase
+     */
+    @PostMapping("/import-opentreebase")
+    fun importOpenTreeBase(): Map<String, String> {
+        importExecutor.submit { openTreeBaseImporter.import() }
+        return mapOf("status" to "started", "source" to OpenTreeBaseImporter.GEOJSON_URL)
     }
 }
