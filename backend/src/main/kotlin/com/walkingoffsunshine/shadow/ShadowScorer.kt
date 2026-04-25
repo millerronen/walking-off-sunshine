@@ -18,6 +18,8 @@ import java.time.ZonedDateTime
 import java.util.concurrent.CompletableFuture
 import kotlin.math.*
 
+private val mdcExecutor = com.walkingoffsunshine.MdcExecutor.cachedThreadPool()
+
 @Service
 class ShadowScorer(
     private val sunPositionService: SunPositionService,
@@ -51,12 +53,12 @@ class ShadowScorer(
         val t0 = System.currentTimeMillis()
         val buildingBbox = polyline.boundingBox(bufferMeters)
         val treeBbox = polyline.boundingBox(treeBufferMeters)
-        val buildingsFuture = CompletableFuture.supplyAsync {
+        val buildingsFuture = CompletableFuture.supplyAsync({
             buildingFetcher.fetchBuildings(buildingBbox.south, buildingBbox.west, buildingBbox.north, buildingBbox.east)
-        }
-        val treesFuture = CompletableFuture.supplyAsync {
+        }, mdcExecutor)
+        val treesFuture = CompletableFuture.supplyAsync({
             treeFetcher.fetchTrees(treeBbox.south, treeBbox.west, treeBbox.north, treeBbox.east)
-        }
+        }, mdcExecutor)
         val buildings = buildingsFuture.get()
         val t1 = System.currentTimeMillis()
         val allTrees = treesFuture.get()

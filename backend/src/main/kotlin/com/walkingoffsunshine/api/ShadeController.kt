@@ -2,25 +2,19 @@ package com.walkingoffsunshine.api
 
 import com.walkingoffsunshine.routes.GoogleRoutesClient
 import com.walkingoffsunshine.shadow.ShadowScorer
-import com.walkingoffsunshine.shadow.haversineMeters
 import com.walkingoffsunshine.sun.SunPositionService
 import com.walkingoffsunshine.weather.WeatherCondition
 import com.walkingoffsunshine.weather.WeatherService
-import org.springframework.web.bind.annotation.CrossOrigin
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.slf4j.LoggerFactory
+import org.springframework.web.bind.annotation.*
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sqrt
-import org.slf4j.LoggerFactory
 
 private const val CACHE_TTL_MS = 20 * 60 * 1000L  // 20 minutes
 
@@ -34,7 +28,7 @@ class ShadeController(
     private val sunPositionService: SunPositionService,
 ) {
     private val log = LoggerFactory.getLogger(ShadeController::class.java)
-    private val executor = Executors.newCachedThreadPool()
+    private val executor = com.walkingoffsunshine.MdcExecutor.cachedThreadPool()
     private val routeCache = ConcurrentHashMap<String, Pair<Long, RouteResponse>>()
 
     /**
@@ -94,6 +88,7 @@ class ShadeController(
         fun ms() = System.currentTimeMillis() - t0
 
         val dt = request.datetime ?: ZonedDateTime.now()
+        log.info("REQUEST /routes origin=(${request.origin.lat},${request.origin.lon}) dest=(${request.destination.lat},${request.destination.lon}) dt=$dt cacheSize=${routeCache.size}")
 
         // Return cached response if available (same origin/dest/hour, within 20 min)
         val cacheKey = routeCacheKey(request.origin, request.destination, dt)
@@ -146,6 +141,7 @@ class ShadeController(
             val response = RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = weatherNote)
             routeCache[cacheKey] = Pair(System.currentTimeMillis(), response)
             log.info("TIMING total=${ms()}ms routes=1 (shortcut)")
+            logRouteAnalytics(request.origin, request.destination, dt, 1.0, 1.0, shortestDistance, 1, weatherCondition, ms())
             return response
         }
 
@@ -215,7 +211,28 @@ class ShadeController(
         val response = RouteResponse(routes = tierRoutes, shortestDistanceMeters = shortestDistance, weatherNote = null)
         routeCache[cacheKey] = Pair(System.currentTimeMillis(), response)
         log.info("TIMING total=${ms()}ms routes=${tierRoutes.size}")
+        logRouteAnalytics(request.origin, request.destination, dt, shadiest?.shade, shortest?.shade, shortestDistance, tierRoutes.size, weatherCondition, ms())
         return response
+    }
+
+    private fun logRouteAnalytics(
+        origin: LatLon, destination: LatLon, dt: ZonedDateTime,
+        shadiestScore: Double?, shortestScore: Double?,
+        shortestDistM: Double, routeCount: Int,
+        weather: WeatherCondition, totalMs: Long,
+    ) {
+        // City-block precision (~100m) for privacy
+        val oLat = "%.3f".format(origin.lat)
+        val oLon = "%.3f".format(origin.lon)
+        val dLat = "%.3f".format(destination.lat)
+        val dLon = "%.3f".format(destination.lon)
+        log.info("ANALYTICS route_request" +
+            " origin=$oLat,$oLon dest=$dLat,$dLon" +
+            " date=${dt.toLocalDate()} hour=${dt.hour}" +
+            " shadiest=${"%.2f".format(shadiestScore ?: -1.0)}" +
+            " shortest_shade=${"%.2f".format(shortestScore ?: -1.0)}" +
+            " distance_m=${shortestDistM.toInt()}" +
+            " routes=$routeCount weather=$weather latency_ms=$totalMs")
     }
 }
 

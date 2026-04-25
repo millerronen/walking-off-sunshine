@@ -20,7 +20,7 @@ class GcsTileStore(
         val blob = storage.get(BlobId.of(bucketName, tileKey(prefix, tile)))
         blob?.getContent()?.let { objectMapper.readValue(it, type) }
     } catch (e: Exception) {
-        log.debug("GCS read miss for {}/{}: {}", prefix, tileKey(prefix, tile), e.message)
+        log.info("GCS read miss for {}/{}: {}", prefix, tileKey(prefix, tile), e.message)
         null
     }
 
@@ -31,9 +31,9 @@ class GcsTileStore(
             BlobInfo.newBuilder(bucketName, key).setContentType("application/json").build(),
             bytes
         )
-        log.debug("GCS write: {}", key)
+        log.info("GCS write: {} ({}KB)", key, bytes.size / 1024)
     } catch (e: Exception) {
-        log.warn("GCS write failed for {}/{}: {}", prefix, tileKey(prefix, tile), e.message)
+        log.warn("GCS write failed for {}/{}", prefix, tileKey(prefix, tile), e)
     }
 
     /** True if the tile already exists in GCS (used by warmup to skip existing tiles). */

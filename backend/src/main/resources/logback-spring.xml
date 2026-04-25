@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Production: standard Spring format with requestId prefix.
+         Cloud Logging parses severity from the level and shows the full line as textPayload.
+         Filter by requestId with: textPayload=~"req=abc12345" -->
+    <springProfile name="default">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%date{ISO8601} %-5level [req=%X{requestId:-none}] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+
+        <!-- Suppress noisy libraries -->
+        <logger name="io.netty.handler.ssl" level="OFF"/>
+        <logger name="reactor.netty.http.client" level="WARN"/>
+    </springProfile>
+
+    <!-- Local development: same but with shorter timestamp -->
+    <springProfile name="local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%date{HH:mm:ss.SSS} %-5level [req=%X{requestId:-none}] %logger{24} - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>

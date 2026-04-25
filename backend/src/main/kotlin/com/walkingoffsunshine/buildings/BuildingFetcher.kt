@@ -60,7 +60,7 @@ class BuildingFetcher(
      * requests within the same instance are instant.
      */
     private val tileCache = java.util.concurrent.ConcurrentHashMap<TileKey, List<Building>>()
-    private val tileExecutor = java.util.concurrent.Executors.newCachedThreadPool()
+    private val tileExecutor = com.walkingoffsunshine.MdcExecutor.cachedThreadPool()
 
     /**
      * In-flight deduplication: if multiple routes request the same tile concurrently,
@@ -74,6 +74,8 @@ class BuildingFetcher(
      */
     fun fetchBuildings(south: Double, west: Double, north: Double, east: Double): List<Building> {
         val tiles = tilesFor(south, west, north, east)
+        val cached = tiles.count { tileCache.containsKey(it) }
+        log.debug("Building fetch: ${tiles.size} tiles ($cached cached, ${tiles.size - cached} to fetch), tileCache=${tileCache.size}")
         val futures = tiles.map { tile ->
             tileCache[tile]?.let { java.util.concurrent.CompletableFuture.completedFuture(it) }
                 ?: tileInFlight.computeIfAbsent(tile) {
@@ -117,7 +119,7 @@ class BuildingFetcher(
                     .block()
             }
 
-            result.onFailure { log.error("Overpass request to $url failed: ${it.message}") }
+            result.onFailure { log.error("Overpass request to $url failed", it) }
 
             val response = result.getOrNull()
             if (response != null) {

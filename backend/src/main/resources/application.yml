@@ -30,8 +30,4 @@ spring:
   jackson:
     default-property-inclusion: non_null
 
-logging:
-  level:
-    # ClosedChannelException on SSL handshake drop is normal in Cloud Run — suppress it
-    io.netty.handler.ssl: OFF
-    reactor.netty.http.client: WARN
+# Logging levels configured in logback-spring.xml (structured JSON for prod, human-readable for local)

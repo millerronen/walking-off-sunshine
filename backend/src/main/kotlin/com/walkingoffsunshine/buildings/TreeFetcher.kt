@@ -25,11 +25,13 @@ class TreeFetcher(
     private val geometryFactory = GeometryFactory()
     private val overpassUrls by lazy { overpassUrlsCsv.split(",").map { it.trim() } }
     private val tileCache = java.util.concurrent.ConcurrentHashMap<TileKey, List<Building>>()
-    private val tileExecutor = java.util.concurrent.Executors.newCachedThreadPool()
+    private val tileExecutor = com.walkingoffsunshine.MdcExecutor.cachedThreadPool()
     private val tileInFlight = java.util.concurrent.ConcurrentHashMap<TileKey, java.util.concurrent.CompletableFuture<List<Building>>>()
 
     fun fetchTrees(south: Double, west: Double, north: Double, east: Double): List<Building> {
         val tiles = tilesFor(south, west, north, east)
+        val cached = tiles.count { tileCache.containsKey(it) }
+        log.debug("Tree fetch: ${tiles.size} tiles ($cached cached, ${tiles.size - cached} to fetch), tileCache=${tileCache.size}")
         val futures = tiles.map { tile ->
             tileCache[tile]?.let { java.util.concurrent.CompletableFuture.completedFuture(it) }
                 ?: tileInFlight.computeIfAbsent(tile) {
@@ -75,7 +77,7 @@ class TreeFetcher(
                     .bodyToMono(TreeOverpassResponse::class.java)
                     .block()
             }
-            result.onFailure { log.error("Tree Overpass request to $url failed: ${it.message}") }
+            result.onFailure { log.error("Tree Overpass request to $url failed", it) }
 
             val response = result.getOrNull() ?: continue
             val trees = response.elements.mapNotNull { it.toTree(geometryFactory, defaultTreeHeight) }
