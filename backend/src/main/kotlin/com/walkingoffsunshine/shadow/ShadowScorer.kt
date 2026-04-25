@@ -24,6 +24,8 @@ class ShadowScorer(
     private val buildingFetcher: BuildingFetcher,
     private val treeFetcher: TreeFetcher,
     @Value("\${shadow.building-fetch-buffer-meters}") private val bufferMeters: Double,
+    @Value("\${shadow.tree-fetch-buffer-meters}") private val treeBufferMeters: Double,
+    @Value("\${shadow.max-trees-per-scoring}") private val maxTreesPerScoring: Int,
     @Value("\${shadow.samples-per-segment}") private val samplesPerSegment: Int,
 ) {
     private val log = LoggerFactory.getLogger(ShadowScorer::class.java)
@@ -47,16 +49,21 @@ class ShadowScorer(
         }
 
         val t0 = System.currentTimeMillis()
-        val bbox = polyline.boundingBox(bufferMeters)
+        val buildingBbox = polyline.boundingBox(bufferMeters)
+        val treeBbox = polyline.boundingBox(treeBufferMeters)
         val buildingsFuture = CompletableFuture.supplyAsync {
-            buildingFetcher.fetchBuildings(bbox.south, bbox.west, bbox.north, bbox.east)
+            buildingFetcher.fetchBuildings(buildingBbox.south, buildingBbox.west, buildingBbox.north, buildingBbox.east)
         }
         val treesFuture = CompletableFuture.supplyAsync {
-            treeFetcher.fetchTrees(bbox.south, bbox.west, bbox.north, bbox.east)
+            treeFetcher.fetchTrees(treeBbox.south, treeBbox.west, treeBbox.north, treeBbox.east)
         }
         val buildings = buildingsFuture.get()
         val t1 = System.currentTimeMillis()
-        val trees = treesFuture.get()
+        val allTrees = treesFuture.get()
+        // Keep only trees close to the route, capped to avoid OOM
+        val trees = filterNearRoute(allTrees, polyline, treeBufferMeters).let {
+            if (it.size > maxTreesPerScoring) it.take(maxTreesPerScoring) else it
+        }
         val t2 = System.currentTimeMillis()
         val shadowPolygons = (buildings + trees).mapNotNull { it.shadowPolygon(sunPos) }
         val t3 = System.currentTimeMillis()
@@ -66,7 +73,7 @@ class ShadowScorer(
         shadowPolygons.forEach { shadowIndex.insert(it.envelopeInternal, it) }
         shadowIndex.build()
 
-        log.info("SCORE buildings=${t1-t0}ms trees=${t2-t1}ms index=${System.currentTimeMillis()-t3}ms | b=${buildings.size} t=${trees.size} shadows=${shadowPolygons.size}")
+        log.info("SCORE buildings=${t1-t0}ms trees=${t2-t1}ms index=${System.currentTimeMillis()-t3}ms | b=${buildings.size} t=${trees.size}/${allTrees.size} shadows=${shadowPolygons.size}")
 
         return polyline.zipWithNext().map { (from, to) ->
             val dist = haversineMeters(from, to)
@@ -137,6 +144,35 @@ private fun Building.shadowPolygon(sun: SunPosition): Polygon? {
 
     val allCoords = (original.toList() + shifted).toTypedArray()
     return footprint.factory.createMultiPointFromCoords(allCoords).convexHull() as? Polygon
+}
+
+/**
+ * Filters buildings (trees) to only those within [maxDistMeters] of any segment in the polyline.
+ * Sorted by distance so callers can .take(N) to cap count.
+ */
+private fun filterNearRoute(candidates: List<Building>, polyline: List<LatLon>, maxDistMeters: Double): List<Building> {
+    if (candidates.isEmpty() || polyline.size < 2) return candidates
+    return candidates
+        .map { tree ->
+            val centroid = tree.footprint.centroid
+            val treePt = LatLon(centroid.y, centroid.x)
+            val minDist = polyline.zipWithNext().minOf { (a, b) -> pointToSegmentDistance(treePt, a, b) }
+            tree to minDist
+        }
+        .filter { it.second <= maxDistMeters }
+        .sortedBy { it.second }
+        .map { it.first }
+}
+
+/** Approximate distance in meters from point P to segment A–B. */
+private fun pointToSegmentDistance(p: LatLon, a: LatLon, b: LatLon): Double {
+    val dx = b.lon - a.lon
+    val dy = b.lat - a.lat
+    if (dx == 0.0 && dy == 0.0) return haversineMeters(p, a)
+    val t = ((p.lon - a.lon) * dx + (p.lat - a.lat) * dy) / (dx * dx + dy * dy)
+    val clamped = t.coerceIn(0.0, 1.0)
+    val closest = LatLon(a.lat + clamped * dy, a.lon + clamped * dx)
+    return haversineMeters(p, closest)
 }
 
 // ---------- Geometry helpers ----------

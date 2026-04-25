@@ -19,6 +19,10 @@ shadow:
   default-tree-height: 4.0
   # Meters to expand bbox when fetching buildings around a path
   building-fetch-buffer-meters: 100
+  # Meters to expand bbox when fetching trees (smaller — tree shadows are short)
+  tree-fetch-buffer-meters: 30
+  # Max trees to score per polyline (nearest to route, after proximity filter)
+  max-trees-per-scoring: 2000
   # Number of sample points per path segment for shade scoring
   samples-per-segment: 10
 
